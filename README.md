@@ -15,6 +15,37 @@ Then open the local address printed in the terminal, usually:
 http://127.0.0.1:8000
 ```
 
+You can also choose a host or starting port:
+
+```bash
+python3 mdm.py --host 127.0.0.1 --port 8000
+```
+
+If the selected port is busy, the app tries the next ports automatically.
+
+When installed as a package, the same app can be started with:
+
+```bash
+mdm-gui
+```
+
+## Test
+
+```bash
+python3 -m unittest discover
+```
+
+## Project Structure
+
+```text
+.
+├── mdm.py              # calculation engine, browser UI, and local server
+├── tests/              # unit tests for formulas, parsing, and output payloads
+├── pyproject.toml      # package metadata and console script
+├── README.md
+└── .gitignore
+```
+
 ## Inputs
 
 - number of supports

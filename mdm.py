@@ -13,10 +13,11 @@ Relative member stiffness is taken as 1/L, as requested.
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass, field
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, List, Tuple
 
 
 @dataclass
@@ -127,53 +128,6 @@ def support_names(count: int) -> List[str]:
     return names
 
 
-def read_float(prompt: str, minimum: float | None = None, default: float | None = None) -> float:
-    while True:
-        suffix = f" [{default}]" if default is not None else ""
-        raw = input(f"{prompt}{suffix}: ").strip()
-        if not raw and default is not None:
-            return default
-        try:
-            value = float(raw)
-        except ValueError:
-            print("Enter a valid number.")
-            continue
-        if minimum is not None and value < minimum:
-            print(f"Enter a value greater than or equal to {minimum}.")
-            continue
-        return value
-
-
-def read_int(prompt: str, minimum: int | None = None, default: int | None = None) -> int:
-    while True:
-        suffix = f" [{default}]" if default is not None else ""
-        raw = input(f"{prompt}{suffix}: ").strip()
-        if not raw and default is not None:
-            return default
-        try:
-            value = int(raw)
-        except ValueError:
-            print("Enter a valid whole number.")
-            continue
-        if minimum is not None and value < minimum:
-            print(f"Enter a value greater than or equal to {minimum}.")
-            continue
-        return value
-
-
-def read_yes_no(prompt: str, default: bool = True) -> bool:
-    default_text = "Y/n" if default else "y/N"
-    while True:
-        raw = input(f"{prompt} [{default_text}]: ").strip().lower()
-        if not raw:
-            return default
-        if raw in {"y", "yes"}:
-            return True
-        if raw in {"n", "no"}:
-            return False
-        print("Enter y or n.")
-
-
 def money(value: float) -> str:
     if abs(value) < 0.0000005:
         value = 0.0
@@ -182,24 +136,6 @@ def money(value: float) -> str:
 
 def fmt(value: float) -> str:
     return f"{value:g}"
-
-
-def print_table(headers: List[str], rows: Iterable[Iterable[object]]) -> None:
-    string_rows = [[str(cell) for cell in row] for row in rows]
-    widths = [len(header) for header in headers]
-    for row in string_rows:
-        for i, cell in enumerate(row):
-            widths[i] = max(widths[i], len(cell))
-
-    def line(left: str, fill: str, middle: str, right: str) -> str:
-        return left + middle.join(fill * (width + 2) for width in widths) + right
-
-    print(line("+", "-", "+", "+"))
-    print("| " + " | ".join(header.ljust(widths[i]) for i, header in enumerate(headers)) + " |")
-    print(line("+", "-", "+", "+"))
-    for row in string_rows:
-        print("| " + " | ".join(cell.rjust(widths[i]) for i, cell in enumerate(row)) + " |")
-    print(line("+", "-", "+", "+"))
 
 
 def build_distribution_rows(
@@ -847,11 +783,10 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def main() -> None:
-    host = "127.0.0.1"
+def create_server(host: str, preferred_port: int, attempts: int = 10) -> Tuple[ThreadingHTTPServer, int]:
     server = None
-    port = 8000
-    for candidate in range(8000, 8010):
+    port = preferred_port
+    for candidate in range(preferred_port, preferred_port + attempts):
         try:
             server = ThreadingHTTPServer((host, candidate), MomentDistributionHandler)
             port = candidate
@@ -859,10 +794,30 @@ def main() -> None:
         except OSError:
             continue
     if server is None:
-        raise RuntimeError("Could not start the GUI server on ports 8000 through 8009.")
+        end_port = preferred_port + attempts - 1
+        raise RuntimeError(f"Could not start the GUI server on ports {preferred_port} through {end_port}.")
+    return server, port
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the Hardy Cross moment distribution browser GUI.")
+    parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind. Default: 127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000, help="Preferred port. Default: 8000")
+    parser.add_argument(
+        "--port-attempts",
+        type=int,
+        default=10,
+        help="Number of sequential ports to try if the preferred port is busy. Default: 10",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    server, port = create_server(args.host, args.port, args.port_attempts)
 
     print("Hardy Cross Moment Distribution GUI")
-    print(f"Open http://{host}:{port} in your browser.")
+    print(f"Open http://{args.host}:{port} in your browser.")
     print("Press Ctrl+C to stop the server.")
     try:
         server.serve_forever()
