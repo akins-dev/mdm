@@ -70,6 +70,11 @@ left support. Separate multiple point loads with semicolons, for example:
 - distribution factor table
 - fixed-end moment formula and substitution table
 - moment distribution table
+- reaction calculations and support reactions
+- shear force diagram
+- bending moment diagram
+- maximum absolute shear force
+- maximum absolute bending moment
 - final support moment summary
 
 ## Assumptions
@@ -97,4 +102,32 @@ For a point load `P` at distance `a` from the left support, with `b = L - a`:
 ```text
 left end  = -Pab^2 / L^2
 right end =  Pa^2b / L^2
+```
+
+## Reaction, Shear, and Bending Calculations
+
+For each span, the app uses the final end moments from the moment distribution
+table and vertical equilibrium:
+
+```text
+R_right = (sum(Wx) + M_left + M_right) / L
+R_left  = sum(W) - R_right
+```
+
+The shear force at a section is:
+
+```text
+V(x) = R_left - wx - sum(P at or before x)
+```
+
+The bending moment is calculated from the area under the shear force diagram:
+
+```text
+M(x) = M_left + integral of V(x)
+```
+
+For the supported loads in this program:
+
+```text
+M(x) = M_left + R_left*x - wx^2/2 - sum(P(x-a))
 ```

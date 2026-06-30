@@ -25,9 +25,9 @@ class SpanCalculationTests(unittest.TestCase):
 
         rows = span.fixed_end_detail_rows()
 
-        self.assertIn(["BC", "UDL", "BC", "-wL^2/12", "-(8 x 4^2) / 12", "-10.6667"], rows)
-        self.assertIn(["BC", "Point 1", "BC", "-Pab^2/L^2", "-(12 x 2 x 2^2) / 4^2", "-6.0000"], rows)
-        self.assertEqual(rows[-2], ["BC", "Total", "BC", "sum", "sum of left-end contributions", "-16.6667"])
+        self.assertIn(["BC", "UDL", "BC", "\\(-wL^2/12\\)", "\\(-(8 \\times 4^2) / 12\\)", "-10.6667"], rows)
+        self.assertIn(["BC", "Point 1", "BC", "\\(-Pab^2/L^2\\)", "\\(-(12 \\times 2 \\times 2^2) / 4^2\\)", "-6.0000"], rows)
+        self.assertEqual(rows[-2], ["BC", "Total", "BC", "\\(\\Sigma M_L\\)", "sum of left-end contributions", "-16.6667"])
 
 
 class MomentDistributionTests(unittest.TestCase):
@@ -35,10 +35,10 @@ class MomentDistributionTests(unittest.TestCase):
         spans = [mdm.Span("A", "B", 6.0), mdm.Span("B", "C", 4.0)]
         supports = mdm.support_names(3)
 
-        rows, factors, _joint_ends, _opposite = mdm.build_distribution_rows(spans, supports, {"A", "C"})
+        rows, factors, _joint_ends, _opposite = mdm.build_standard_distribution_rows(spans, supports, {"A", "C"})
 
-        self.assertEqual(rows[1], ["B", "AB", "BA", "0.1667", "0.4167", "0.4000"])
-        self.assertEqual(rows[2], ["B", "BC", "BC", "0.2500", "0.4167", "0.6000"])
+        self.assertEqual(rows[1], ["B", "BA", "\\(k=1/L=1/6=0.1667\\)", "\\(\\Sigma k=0.4167\\)", "\\(DF=k/\\Sigma k=0.4000\\)"])
+        self.assertEqual(rows[2], ["B", "BC", "\\(k=1/L=1/4=0.2500\\)", "\\(\\Sigma k=0.4167\\)", "\\(DF=k/\\Sigma k=0.6000\\)"])
         self.assertAlmostEqual(factors["BA"], 0.4)
         self.assertAlmostEqual(factors["BC"], 0.6)
 
@@ -57,8 +57,39 @@ class MomentDistributionTests(unittest.TestCase):
         result = mdm.calculate_from_payload(payload)
 
         self.assertIn("Calculated 2 span(s)", result["status"])
-        self.assertEqual(set(result["tables"]), {"distribution", "fem", "moment", "support"})
-        self.assertEqual(result["tables"]["moment"]["rows"][-1], ["Final moments", "-32.6667", "24.6667", "-24.6667", "12.6667"])
+        self.assertTrue(
+            {
+                "distribution",
+                "fem",
+                "moment",
+                "reactions",
+                "support_reactions",
+                "support_reaction_calculations",
+                "reaction_calculations",
+                "shear_calculations",
+                "bending_calculations",
+                "equilibrium_checks",
+                "station_values",
+                "shear_values",
+                "moment_values",
+                "extrema",
+                "support",
+            }.issubset(result["tables"])
+        )
+        self.assertEqual(result["tables"]["moment"]["rows"][4][0], "Distribution cycle 1")
+        self.assertEqual(result["tables"]["moment"]["rows"][5][0], "Carry over cycle 1")
+        self.assertEqual(result["tables"]["moment"]["rows"][-1], ["End Moment", "-32.6667", "24.6667", "-24.6667", "12.6667"])
+        self.assertEqual(result["tables"]["support_reactions"]["rows"], [["A", "31.3333"], ["B", "53.6667"], ["C", "19.0000"]])
+        self.assertEqual(result["tables"]["support_reaction_calculations"]["rows"][1][-1], "53.6667")
+        self.assertEqual(result["tables"]["extrema"]["rows"][0], ["Maximum absolute shear", "AB", "0.0000", "31.3333"])
+        self.assertEqual(result["tables"]["equilibrium_checks"]["rows"][0][-1], "Balanced")
+        self.assertEqual(result["tables"]["equilibrium_checks"]["rows"][1][-1], "Balanced")
+        self.assertIn("shear", result["diagrams"])
+        self.assertIn("moment", result["diagrams"])
+        self.assertIn("beam", result)
+        self.assertEqual(result["diagrams"]["shear"][0]["y"], 0.0)
+        self.assertEqual(result["diagrams"]["shear"][-1]["y"], 0.0)
+        self.assertEqual(result["beam"]["spans"][0]["name"], "AB")
 
 
 class InputParsingTests(unittest.TestCase):

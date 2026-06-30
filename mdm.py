@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 import json
+import math
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict, List, Tuple
 
@@ -66,8 +67,8 @@ class Span:
                     self.name,
                     "UDL",
                     self.left_end,
-                    "-wL^2/12",
-                    f"-({fmt(self.udl)} x {fmt(self.length)}^2) / 12",
+                    "\\(-wL^2/12\\)",
+                    f"\\(-({fmt(self.udl)} \\times {fmt(self.length)}^2) / 12\\)",
                     money(left_value),
                 ]
             )
@@ -76,8 +77,8 @@ class Span:
                     self.name,
                     "UDL",
                     self.right_end,
-                    "wL^2/12",
-                    f"({fmt(self.udl)} x {fmt(self.length)}^2) / 12",
+                    "\\(wL^2/12\\)",
+                    f"\\(({fmt(self.udl)} \\times {fmt(self.length)}^2) / 12\\)",
                     money(right_value),
                 ]
             )
@@ -91,8 +92,8 @@ class Span:
                     self.name,
                     f"Point {index}",
                     self.left_end,
-                    "-Pab^2/L^2",
-                    f"-({fmt(load)} x {fmt(a)} x {fmt(b)}^2) / {fmt(self.length)}^2",
+                    "\\(-Pab^2/L^2\\)",
+                    f"\\(-({fmt(load)} \\times {fmt(a)} \\times {fmt(b)}^2) / {fmt(self.length)}^2\\)",
                     money(left_value),
                 ]
             )
@@ -101,19 +102,19 @@ class Span:
                     self.name,
                     f"Point {index}",
                     self.right_end,
-                    "Pa^2b/L^2",
-                    f"({fmt(load)} x {fmt(a)}^2 x {fmt(b)}) / {fmt(self.length)}^2",
+                    "\\(Pa^2b/L^2\\)",
+                    f"\\(({fmt(load)} \\times {fmt(a)}^2 \\times {fmt(b)}) / {fmt(self.length)}^2\\)",
                     money(right_value),
                 ]
             )
 
         if not rows:
-            rows.append([self.name, "No load", self.left_end, "0", "0", money(0.0)])
-            rows.append([self.name, "No load", self.right_end, "0", "0", money(0.0)])
+            rows.append([self.name, "No load", self.left_end, "\\(0\\)", "\\(0\\)", money(0.0)])
+            rows.append([self.name, "No load", self.right_end, "\\(0\\)", "\\(0\\)", money(0.0)])
 
         left_total, right_total = self.fixed_end_moments()
-        rows.append([self.name, "Total", self.left_end, "sum", "sum of left-end contributions", money(left_total)])
-        rows.append([self.name, "Total", self.right_end, "sum", "sum of right-end contributions", money(right_total)])
+        rows.append([self.name, "Total", self.left_end, "\\(\\Sigma M_L\\)", "sum of left-end contributions", money(left_total)])
+        rows.append([self.name, "Total", self.right_end, "\\(\\Sigma M_R\\)", "sum of right-end contributions", money(right_total)])
         return rows
 
 
@@ -178,6 +179,27 @@ def build_distribution_rows(
     return rows, distribution_factors, joint_ends, opposite
 
 
+def build_standard_distribution_rows(
+    spans: List[Span],
+    supports: List[str],
+    fixed_supports: set[str],
+) -> Tuple[List[List[str]], Dict[str, float], Dict[str, List[str]], Dict[str, str]]:
+    rows, distribution_factors, joint_ends, opposite = build_distribution_rows(spans, supports, fixed_supports)
+    standard_rows: List[List[str]] = []
+    for joint, span_name, end, stiffness, joint_sum, df in rows:
+        span = next(span for span in spans if span.name == span_name)
+        standard_rows.append(
+            [
+                joint,
+                end,
+                f"\\(k=1/L=1/{fmt(span.length)}={stiffness}\\)",
+                f"\\(\\Sigma k={joint_sum}\\)",
+                f"\\(DF=k/\\Sigma k={df}\\)",
+            ]
+        )
+    return standard_rows, distribution_factors, joint_ends, opposite
+
+
 def moment_distribution(
     spans: List[Span],
     supports: List[str],
@@ -196,14 +218,20 @@ def moment_distribution(
         moments[span.left_end] = left_fem
         moments[span.right_end] = right_fem
 
+    end_to_joint = {end: joint for joint, ends in joint_ends.items() for end in ends}
     rows: List[List[str]] = [
-        ["Fixed-end moments"] + [money(moments[end]) for end in end_labels],
+        ["Joints"] + [end_to_joint[end] for end in end_labels],
+        ["Members"] + end_labels,
+        ["DF"] + [money(distribution_factors[end]) for end in end_labels],
+        ["FEM"] + [money(moments[end]) for end in end_labels],
     ]
 
     cycles_used = 0
     for cycle in range(1, max_cycles + 1):
         cycles_used = cycle
-        cycle_changed = False
+        balance_row = {end: 0.0 for end in end_labels}
+        carry_row = {end: 0.0 for end in end_labels}
+        active_joints: List[str] = []
 
         for joint in supports:
             if joint in fixed_supports:
@@ -213,33 +241,33 @@ def moment_distribution(
             if abs(unbalanced) <= tolerance:
                 continue
 
-            cycle_changed = True
-            balance_row = {end: 0.0 for end in end_labels}
-            carry_row = {end: 0.0 for end in end_labels}
-
+            active_joints.append(joint)
             for end in joint_ends[joint]:
                 distributed = -unbalanced * distribution_factors[end]
                 balance_row[end] += distributed
-                moments[end] += distributed
 
-            for end in joint_ends[joint]:
-                carried = balance_row[end] * 0.5
-                other_end = opposite[end]
-                carry_row[other_end] += carried
-                moments[other_end] += carried
-
-            rows.append([f"Cycle {cycle}: balance {joint}"] + [money(balance_row[end]) for end in end_labels])
-            rows.append([f"Cycle {cycle}: carry-over {joint}"] + [money(carry_row[end]) for end in end_labels])
-
-        max_unbalanced = 0.0
-        for joint in supports:
-            if joint not in fixed_supports:
-                max_unbalanced = max(max_unbalanced, abs(sum(moments[end] for end in joint_ends[joint])))
-
-        if max_unbalanced <= tolerance or not cycle_changed:
+        if not active_joints:
             break
 
-    rows.append(["Final moments"] + [money(moments[end]) for end in end_labels])
+        for end in end_labels:
+            moments[end] += balance_row[end]
+
+        for end in end_labels:
+            carried = balance_row[end] * 0.5
+            carry_row[opposite[end]] += carried
+        for end in end_labels:
+            moments[end] += carry_row[end]
+
+        rows.append([f"Distribution cycle {cycle}"] + [money(balance_row[end]) for end in end_labels])
+        rows.append([f"Carry over cycle {cycle}"] + [money(carry_row[end]) for end in end_labels])
+
+        max_unbalanced = max(
+            [abs(sum(moments[end] for end in joint_ends[joint])) for joint in supports if joint not in fixed_supports] or [0.0]
+        )
+        if max_unbalanced <= tolerance:
+            break
+
+    rows.append(["End Moment"] + [money(moments[end]) for end in end_labels])
     return ["Step"] + end_labels, rows, moments, cycles_used
 
 
@@ -255,12 +283,351 @@ def support_moment_rows(
     return rows
 
 
+def total_span_load(span: Span) -> float:
+    return span.udl * span.length + sum(load for load, _distance in span.point_loads)
+
+
+def load_moment_about_left(span: Span) -> float:
+    return span.udl * span.length * (span.length / 2.0) + sum(load * distance for load, distance in span.point_loads)
+
+
+def span_reactions(span: Span, final_moments: Dict[str, float]) -> Tuple[float, float]:
+    total_load = total_span_load(span)
+    moment_about_left = load_moment_about_left(span)
+    left_moment = final_moments[span.left_end]
+    right_moment = final_moments[span.right_end]
+    right_reaction = (moment_about_left + left_moment + right_moment) / span.length
+    left_reaction = total_load - right_reaction
+    return left_reaction, right_reaction
+
+
+def shear_at(span: Span, left_reaction: float, x: float, after_point_loads: bool = True) -> float:
+    shear = left_reaction - span.udl * x
+    for load, distance in span.point_loads:
+        if distance < x or (after_point_loads and math.isclose(distance, x, abs_tol=1e-9)):
+            shear -= load
+    return shear
+
+
+def moment_at(span: Span, final_moments: Dict[str, float], left_reaction: float, x: float) -> float:
+    moment = final_moments[span.left_end] + left_reaction * x - (span.udl * x**2) / 2.0
+    for load, distance in span.point_loads:
+        if x >= distance:
+            moment -= load * (x - distance)
+    return moment
+
+
+def span_station_candidates(span: Span, final_moments: Dict[str, float], left_reaction: float) -> List[float]:
+    candidates = {0.0, span.length}
+    for _load, distance in span.point_loads:
+        candidates.add(distance)
+
+    breakpoints = [0.0] + sorted({distance for _load, distance in span.point_loads if 0.0 < distance < span.length}) + [span.length]
+    for start, end in zip(breakpoints, breakpoints[1:]):
+        shear_start = shear_at(span, left_reaction, start, after_point_loads=True)
+        if span.udl and start <= shear_start / span.udl + start <= end:
+            root = start + shear_start / span.udl
+            if 0.0 <= root <= span.length:
+                candidates.add(root)
+
+    return sorted(candidates)
+
+
+def diagram_points(span: Span, final_moments: Dict[str, float], left_reaction: float, global_start: float) -> Tuple[List[Dict[str, object]], List[Dict[str, object]]]:
+    x_values = {0.0, span.length}
+    key_x_values = set(span_station_candidates(span, final_moments, left_reaction))
+    x_values.update(key_x_values)
+    intervals = 48
+    for index in range(intervals + 1):
+        x_values.add(span.length * index / intervals)
+    for _load, distance in span.point_loads:
+        key_x_values.add(distance)
+        x_values.add(max(0.0, distance - 1e-6))
+        x_values.add(distance)
+        x_values.add(min(span.length, distance + 1e-6))
+
+    shear_points = []
+    moment_points = []
+    for x in sorted(x_values):
+        shear_points.append(
+            {
+                "span": span.name,
+                "local_x": x,
+                "x": global_start + x,
+                "y": shear_at(span, left_reaction, x, after_point_loads=True),
+                "key": any(math.isclose(x, key_x, abs_tol=1e-6) for key_x in key_x_values),
+            }
+        )
+        moment_points.append(
+            {
+                "span": span.name,
+                "local_x": x,
+                "x": global_start + x,
+                "y": moment_at(span, final_moments, left_reaction, x),
+                "key": any(math.isclose(x, key_x, abs_tol=1e-6) for key_x in key_x_values),
+            }
+        )
+    return shear_points, moment_points
+
+
+def analysis_from_final_moments(
+    spans: List[Span],
+    supports: List[str],
+    final_moments: Dict[str, float],
+) -> Dict[str, object]:
+    reaction_rows: List[List[str]] = []
+    reaction_calc_rows: List[List[str]] = []
+    support_reaction_calc_rows: List[List[str]] = []
+    shear_calc_rows: List[List[str]] = []
+    bending_calc_rows: List[List[str]] = []
+    extrema_rows: List[List[str]] = []
+    equilibrium_rows: List[List[str]] = []
+    support_reactions = {support: 0.0 for support in supports}
+    support_reaction_parts = {support: [] for support in supports}
+    shear_points: List[Dict[str, object]] = []
+    moment_points: List[Dict[str, object]] = []
+    support_positions: List[Dict[str, object]] = []
+    span_infos: List[Dict[str, object]] = []
+    joint_ends: Dict[str, List[str]] = {support: [] for support in supports}
+    for span in spans:
+        joint_ends[span.left].append(span.left_end)
+        joint_ends[span.right].append(span.right_end)
+
+    global_x = 0.0
+    max_shear = {"span": "", "x": 0.0, "value": 0.0}
+    max_moment = {"span": "", "x": 0.0, "value": 0.0}
+
+    support_positions.append({"name": supports[0], "x": global_x})
+    shear_points.append({"span": "Start", "local_x": 0.0, "x": 0.0, "y": 0.0, "key": True})
+    for span in spans:
+        span_start = global_x
+        left_reaction, right_reaction = span_reactions(span, final_moments)
+        support_reactions[span.left] += left_reaction
+        support_reactions[span.right] += right_reaction
+        support_reaction_parts[span.left].append((span.name, left_reaction))
+        support_reaction_parts[span.right].append((span.name, right_reaction))
+
+        total_load = total_span_load(span)
+        load_moment = load_moment_about_left(span)
+        reaction_calc_rows.append(
+            [
+                span.name,
+                "Right reaction",
+                "\\(R_R=(\\Sigma W x + M_L + M_R)/L\\)",
+                (
+                    f"\\(({money(load_moment)} + {money(final_moments[span.left_end])} + "
+                    f"{money(final_moments[span.right_end])})/{fmt(span.length)}\\)"
+                ),
+                money(right_reaction),
+            ]
+        )
+        reaction_calc_rows.append(
+            [
+                span.name,
+                "Left reaction",
+                "\\(R_L=\\Sigma W-R_R\\)",
+                f"\\({money(total_load)} - {money(right_reaction)}\\)",
+                money(left_reaction),
+            ]
+        )
+
+        station_candidates = span_station_candidates(span, final_moments, left_reaction)
+        for x in station_candidates:
+            shear = shear_at(span, left_reaction, x, after_point_loads=True)
+            moment = moment_at(span, final_moments, left_reaction, x)
+            if abs(moment) > abs(max_moment["value"]):
+                max_moment = {"span": span.name, "x": x, "value": moment}
+            extrema_rows.append([span.name, money(x), money(shear), money(moment)])
+
+        shear_checks = [(0.0, True), (span.length, True)]
+        for _load, distance in span.point_loads:
+            shear_checks.append((distance, False))
+            shear_checks.append((distance, True))
+        for x, after_point_loads in shear_checks:
+            shear = shear_at(span, left_reaction, x, after_point_loads=after_point_loads)
+            if abs(shear) > abs(max_shear["value"]):
+                max_shear = {"span": span.name, "x": x, "value": shear}
+
+        shear_calc_rows.append(
+            [
+                span.name,
+                "\\(V(x)=R_L-wx-\\Sigma P_{a\\le x}\\)",
+                f"\\(V(x)={money(left_reaction)}-{money(span.udl)}x-\\Sigma P\\)",
+            ]
+        )
+        for x in station_candidates:
+            point_load_sum = sum(load for load, distance in span.point_loads if distance <= x)
+            shear_calc_rows.append(
+                [
+                    f"{span.name} at x={money(x)}",
+                    "\\(V=R_L-wx-\\Sigma P\\)",
+                    f"\\({money(left_reaction)}-{money(span.udl)}({money(x)})-{money(point_load_sum)}={money(shear_at(span, left_reaction, x))}\\)",
+                ]
+            )
+        bending_calc_rows.append(
+            [
+                span.name,
+                "\\(M(x)=M_L+\\int_0^x V(s)\\,ds\\)",
+                f"\\(M(x)={money(final_moments[span.left_end])}+{money(left_reaction)}x-{money(span.udl)}x^2/2-\\Sigma P(x-a)\\)",
+            ]
+        )
+        for x in station_candidates:
+            point_terms = sum(load * (x - distance) for load, distance in span.point_loads if x >= distance)
+            bending_calc_rows.append(
+                [
+                    f"{span.name} at x={money(x)}",
+                    "\\(M=M_L+R_Lx-wx^2/2-\\Sigma P(x-a)\\)",
+                    (
+                        f"\\({money(final_moments[span.left_end])}+{money(left_reaction)}({money(x)})-"
+                        f"{money(span.udl)}({money(x)})^2/2-{money(point_terms)}="
+                        f"{money(moment_at(span, final_moments, left_reaction, x))}\\)"
+                    ),
+                ]
+            )
+
+        span_shear_points, span_moment_points = diagram_points(span, final_moments, left_reaction, global_x)
+        shear_points.extend(span_shear_points)
+        moment_points.extend(span_moment_points)
+        global_x += span.length
+        support_positions.append({"name": span.right, "x": global_x})
+        span_infos.append(
+            {
+                "name": span.name,
+                "left": span.left,
+                "right": span.right,
+                "length": span.length,
+                "start": span_start,
+                "end": global_x,
+                "udl": span.udl,
+                "point_loads": [{"load": load, "distance": distance} for load, distance in span.point_loads],
+                "left_reaction": left_reaction,
+                "right_reaction": right_reaction,
+                "ml": final_moments[span.left_end],
+                "mr": final_moments[span.right_end],
+                "load_moment": load_moment,
+                "total_load": total_load,
+            }
+        )
+
+        reaction_rows.append([span.left, span.name, "Left span-end reaction", money(left_reaction)])
+        reaction_rows.append([span.right, span.name, "Right span-end reaction", money(right_reaction)])
+        shear_closure = left_reaction + right_reaction - total_load
+        right_before_support = shear_at(span, left_reaction, span.length, after_point_loads=True)
+        right_after_support = right_before_support + right_reaction
+        equilibrium_rows.append(
+            [
+                span.name,
+                "Vertical shear closure",
+                "\\(R_L+R_R-\\Sigma W\\)",
+                f"\\({money(left_reaction)}+{money(right_reaction)}-{money(total_load)}\\)",
+                money(shear_closure),
+                "Balanced" if abs(shear_closure) < 1e-6 else "Unbalanced",
+            ]
+        )
+        equilibrium_rows.append(
+            [
+                span.name,
+                "SFD right support closure",
+                "\\(V(L^-)+R_R\\)",
+                f"\\({money(right_before_support)}+{money(right_reaction)}\\)",
+                money(right_after_support),
+                "Balanced" if abs(right_after_support) < 1e-6 else "Unbalanced",
+            ]
+        )
+
+    support_rows = [[support, money(support_reactions[support])] for support in supports]
+    for support in supports:
+        parts = support_reaction_parts[support]
+        if not parts:
+            continue
+        support_reaction_calc_rows.append(
+            [
+                support,
+                " + ".join(f"{span_name}: {money(value)}" for span_name, value in parts),
+                "\\(" + "+".join(money(value) for _span_name, value in parts) + "\\)",
+                money(support_reactions[support]),
+            ]
+        )
+
+    shear_points.append({"span": "End", "local_x": 0.0, "x": global_x, "y": 0.0, "key": True})
+    total_support_reaction = sum(support_reactions.values())
+    total_load_all_spans = sum(total_span_load(span) for span in spans)
+    equilibrium_rows.append(
+        [
+            "Whole beam",
+            "Global vertical shear closure",
+            "\\(\\Sigma R-\\Sigma W\\)",
+            f"\\({money(total_support_reaction)}-{money(total_load_all_spans)}\\)",
+            money(total_support_reaction - total_load_all_spans),
+            "Balanced" if abs(total_support_reaction - total_load_all_spans) < 1e-6 else "Unbalanced",
+        ]
+    )
+    for support in supports:
+        residual = sum(final_moments[end] for end in joint_ends[support])
+        is_exterior_support = support in {supports[0], supports[-1]}
+        status = "Fixed-end support moment" if is_exterior_support and abs(residual) >= 1e-4 else ("Balanced" if abs(residual) < 1e-4 else "Residual moment remains")
+        equilibrium_rows.append(
+            [
+                support,
+                "Residual joint moment",
+                "\\(\\Sigma M_{joint}\\)",
+                "\\(" + "+".join(money(final_moments[end]) for end in joint_ends[support]) + "\\)",
+                money(residual),
+                status,
+            ]
+        )
+
+    shear_value_rows = [
+        [str(point["span"]), money(float(point["local_x"])), money(float(point["x"])), money(float(point["y"]))]
+        for point in shear_points
+    ]
+    moment_value_rows = [
+        [str(point["span"]), money(float(point["local_x"])), money(float(point["x"])), money(float(point["y"]))]
+        for point in moment_points
+    ]
+    summary_rows = [
+        ["Maximum absolute shear", max_shear["span"], money(max_shear["x"]), money(max_shear["value"])],
+        ["Maximum absolute bending moment", max_moment["span"], money(max_moment["x"]), money(max_moment["value"])],
+    ]
+
+    return {
+        "reaction_rows": reaction_rows,
+        "support_rows": support_rows,
+        "reaction_calc_rows": reaction_calc_rows,
+        "support_reaction_calc_rows": support_reaction_calc_rows,
+        "shear_calc_rows": shear_calc_rows,
+        "bending_calc_rows": bending_calc_rows,
+        "equilibrium_rows": equilibrium_rows,
+        "extrema_rows": extrema_rows,
+        "shear_value_rows": shear_value_rows,
+        "moment_value_rows": moment_value_rows,
+        "summary_rows": summary_rows,
+        "diagrams": {
+            "shear": shear_points,
+            "moment": moment_points,
+            "supports": support_positions,
+        },
+        "beam": {
+            "spans": span_infos,
+            "supports": support_positions,
+            "support_reactions": support_reactions,
+        },
+    }
+
+
 APP_HTML = r"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hardy Cross Moment Distribution</title>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(', '\\)'], ['$', '$']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -440,6 +807,51 @@ APP_HTML = r"""<!doctype html>
       color: var(--muted);
       line-height: 1.4;
     }
+    .math-fallback {
+      font-family: "Cambria Math", "Times New Roman", serif;
+      font-style: italic;
+      white-space: nowrap;
+    }
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+    .subheading {
+      margin: 6px 0 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .diagram {
+      width: 100%;
+      min-width: 720px;
+      height: 300px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .diagram path.curve {
+      fill: none;
+      stroke-width: 2.5;
+    }
+    .diagram .axis {
+      stroke: #344054;
+      stroke-width: 1;
+    }
+    .diagram .grid-line {
+      stroke: #e5eaf0;
+      stroke-width: 1;
+    }
+    .diagram text {
+      font-size: 11px;
+      fill: #344054;
+    }
+    tr.check-fail td {
+      background: #fff1f0;
+      color: #b42318;
+      font-weight: 700;
+    }
+    tr.check-pass td {
+      background: #f0fdf4;
+    }
     @media (max-width: 860px) {
       main {
         grid-template-columns: 1fr;
@@ -503,6 +915,8 @@ APP_HTML = r"""<!doctype html>
       distribution: 'Distribution Factors',
       fem: 'Fixed-End Moment Calculations',
       moment: 'Moment Distribution',
+      reactions: 'Reactions',
+      diagrams: 'SFD / BMD',
       support: 'Final Support Moments'
     };
 
@@ -582,6 +996,7 @@ APP_HTML = r"""<!doctype html>
       setStatus(data.status, false);
       renderTabs();
       renderActiveTable();
+      typesetMath();
     }
 
     function setStatus(message, isError) {
@@ -610,20 +1025,448 @@ APP_HTML = r"""<!doctype html>
         return;
       }
       const table = currentResults.tables[activeTab];
+      if (activeTab === 'diagrams') {
+        outputEl.innerHTML = renderDiagrams();
+        typesetMath();
+        return;
+      }
+      if (activeTab === 'reactions') {
+        outputEl.innerHTML = `
+          <div class="stack">
+            <div>
+              <h2 class="subheading">Equilibrium Checks</h2>
+              <p class="formula">A zero residual means the check is balanced. Nonzero residuals are shown in red.</p>
+              ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
+            </div>
+            <div>
+              <h2 class="subheading">Reaction Calculations</h2>
+              ${buildTable(currentResults.tables.reaction_calculations.headers, currentResults.tables.reaction_calculations.rows)}
+            </div>
+            <div>
+              <h2 class="subheading">Span-End Reactions</h2>
+              ${buildTable(currentResults.tables.reactions.headers, currentResults.tables.reactions.rows)}
+            </div>
+            <div>
+              <h2 class="subheading">Support Reaction Summation</h2>
+              ${buildTable(currentResults.tables.support_reaction_calculations.headers, currentResults.tables.support_reaction_calculations.rows)}
+            </div>
+            <div>
+              <h2 class="subheading">Total Support Reactions</h2>
+              ${buildTable(currentResults.tables.support_reactions.headers, currentResults.tables.support_reactions.rows)}
+            </div>
+          </div>
+        `;
+        typesetMath();
+        return;
+      }
       const note = activeTab === 'fem'
-        ? '<p class="formula">Clockwise member-end moments are positive. UDL: left = -wL^2/12, right = wL^2/12. Point load: left = -Pab^2/L^2, right = Pa^2b/L^2, where b = L - a.</p>'
+        ? '<p class="formula">Clockwise member-end moments are positive. \\(UDL: M_L=-wL^2/12, M_R=wL^2/12\\). Point load: \\(M_L=-Pab^2/L^2, M_R=Pa^2b/L^2\\), where \\(b=L-a\\).</p>'
+        : activeTab === 'distribution'
+        ? '<p class="formula">Relative stiffness remains \\(k=1/L\\), and \\(DF=k/\\Sigma k\\).</p>'
         : '';
       outputEl.innerHTML = note + buildTable(table.headers, table.rows);
+      typesetMath();
     }
 
     function buildTable(headers, rows) {
-      const head = headers.map(header => `<th>${escapeHtml(header)}</th>`).join('');
-      const body = rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('');
+      const head = headers.map(header => `<th>${formatCell(header)}</th>`).join('');
+      const body = rows.map(row => `<tr class="${rowClass(row)}">${row.map(cell => `<td>${formatCell(cell)}</td>`).join('')}</tr>`).join('');
       return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function rowClass(row) {
+      const status = String(row[row.length - 1] || '').toLowerCase();
+      if (status.includes('fixed-end')) return '';
+      if (status.includes('unbalanced') || status.includes('residual')) return 'check-fail';
+      if (status.includes('balanced')) return 'check-pass';
+      return '';
+    }
+
+    function renderDiagrams() {
+      return `
+        <div class="stack">
+          <div>
+            <h2 class="subheading">Beam, Loads, and Support Reactions</h2>
+            <p class="formula">The reaction forces shown below are the same forces used to close the SFD jumps at the supports.</p>
+            ${drawBeamSketch()}
+          </div>
+          <div>
+            <h2 class="subheading">Span Reaction Force Calculations</h2>
+            ${renderFbdCalculations()}
+          </div>
+          <div>
+            <h2 class="subheading">Support Reaction Summation</h2>
+            ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
+          </div>
+          <div>
+            <h2 class="subheading">Maximum Values</h2>
+            ${buildTable(currentResults.tables.extrema.headers, currentResults.tables.extrema.rows)}
+          </div>
+          <div>
+            <h2 class="subheading">Equilibrium Checks</h2>
+            <p class="formula">The reactions are calculated from final span end moments, so each span is checked with \\(R_L+R_R-\\Sigma W=0\\). Residual joint moment is checked separately with \\(\\Sigma M_{joint}\\).</p>
+            ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
+          </div>
+          <div>
+            <h2 class="subheading">Shear Force Diagram</h2>
+            <p class="formula">\\(V(x)=R_L-wx-\\Sigma P_{a\\le x}\\)</p>
+            ${drawDiagram(currentResults.diagrams.shear, currentResults.diagrams.supports, '#1264a3', 'SFD')}
+          </div>
+          <div>
+            <h2 class="subheading">Bending Moment Diagram</h2>
+            <p class="formula">Bending moment is calculated from the area under the shear force diagram: \\(M(x)=M_L+\\int_0^x V(s)\\,ds\\).</p>
+            ${drawDiagram(currentResults.diagrams.moment, currentResults.diagrams.supports, '#b42318', 'BMD')}
+          </div>
+          <div>
+            <h2 class="subheading">Shear Calculations</h2>
+            ${buildTable(currentResults.tables.shear_calculations.headers, currentResults.tables.shear_calculations.rows)}
+          </div>
+          <div>
+            <h2 class="subheading">Bending Moment Calculations</h2>
+            ${buildTable(currentResults.tables.bending_calculations.headers, currentResults.tables.bending_calculations.rows)}
+          </div>
+          <div>
+            <h2 class="subheading">Station Values</h2>
+            ${buildTable(currentResults.tables.station_values.headers, currentResults.tables.station_values.rows)}
+          </div>
+        </div>
+      `;
+    }
+
+    function drawBeamSketch() {
+      const beam = currentResults.beam;
+      if (!beam || !beam.spans || beam.spans.length === 0) return '<p class="formula">No beam data.</p>';
+      const width = 980;
+      const height = 300;
+      const pad = { left: 58, right: 28, top: 28, bottom: 52 };
+      const minX = 0;
+      const maxX = Math.max(...beam.supports.map(support => support.x));
+      const beamY = 150;
+      const xScale = x => pad.left + ((x - minX) / Math.max(1e-9, maxX - minX)) * (width - pad.left - pad.right);
+
+      const spanLines = beam.spans.map(span => {
+        const x1 = xScale(span.start);
+        const x2 = xScale(span.end);
+        const mid = (x1 + x2) / 2;
+        const udl = Number(span.udl);
+        const udlMarkup = udl > 0 ? drawUdl(x1, x2, beamY - 72, beamY - 18, `${udl.toFixed(2)} / length`) : '';
+        const points = (span.point_loads || []).map(point => {
+          const x = xScale(span.start + Number(point.distance));
+          return drawArrow(x, beamY - 78, x, beamY - 16, '#b42318', `${Number(point.load).toFixed(2)}`);
+        }).join('');
+        return `
+          <line x1="${x1}" y1="${beamY}" x2="${x2}" y2="${beamY}" stroke="#1b2430" stroke-width="4"></line>
+          <text x="${mid - 18}" y="${beamY + 34}">${escapeHtml(span.name)}</text>
+          <text x="${mid - 28}" y="${beamY + 52}">L=${Number(span.length).toFixed(2)}</text>
+          ${udlMarkup}
+          ${points}
+        `;
+      }).join('');
+
+      const supportMarks = beam.supports.map(support => {
+        const x = xScale(support.x);
+        const reaction = Number(beam.support_reactions[support.name] || 0);
+        const reactionArrow = reaction >= 0
+          ? drawArrow(x, beamY + 72, x, beamY + 18, '#1264a3', `${reaction.toFixed(2)}`)
+          : drawArrow(x, beamY + 18, x, beamY + 72, '#1264a3', `${reaction.toFixed(2)}`);
+        return `
+          <polygon points="${x - 12},${beamY + 24} ${x + 12},${beamY + 24} ${x},${beamY + 2}" fill="#e8edf2" stroke="#344054"></polygon>
+          <text x="${x - 5}" y="${beamY + 92}">${escapeHtml(support.name)}</text>
+          ${reactionArrow}
+        `;
+      }).join('');
+
+      return `
+        <svg class="diagram" viewBox="0 0 ${width} ${height}" role="img" aria-label="Beam loads and reactions">
+          <defs>
+            <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#1264a3"></path>
+            </marker>
+            <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#b42318"></path>
+            </marker>
+          </defs>
+          ${spanLines}
+          ${supportMarks}
+          <text x="${pad.left}" y="18">Beam, loads, and final support reactions</text>
+        </svg>
+      `;
+    }
+
+    function drawUdl(x1, x2, yTop, yBottom, label) {
+      const count = Math.max(3, Math.min(10, Math.floor((x2 - x1) / 55)));
+      const arrows = [];
+      for (let index = 0; index < count; index += 1) {
+        const x = x1 + ((index + 0.5) / count) * (x2 - x1);
+        arrows.push(drawArrow(x, yTop, x, yBottom, '#b42318', ''));
+      }
+      return `
+        <line x1="${x1 + 8}" y1="${yTop}" x2="${x2 - 8}" y2="${yTop}" stroke="#b42318" stroke-width="2"></line>
+        ${arrows.join('')}
+        <text x="${(x1 + x2) / 2 - 26}" y="${yTop - 8}">${escapeHtml(label)}</text>
+      `;
+    }
+
+    function drawArrow(x1, y1, x2, y2, color, label) {
+      const marker = color === '#1264a3' ? 'arrow-blue' : 'arrow-red';
+      const textY = y1 < y2 ? y1 - 6 : y1 + 16;
+      return `
+        <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2.5" marker-end="url(#${marker})"></line>
+        ${label ? `<text x="${x1 + 5}" y="${textY}">${escapeHtml(label)}</text>` : ''}
+      `;
+    }
+
+    function drawDiagram(points, supports, color, label) {
+      if (!points || points.length === 0) return '<p class="formula">No diagram data.</p>';
+      const width = 980;
+      const height = 300;
+      const pad = { left: 56, right: 20, top: 22, bottom: 42 };
+      const xs = points.map(point => point.x);
+      const ys = points.map(point => point.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const maxAbsY = Math.max(1, ...ys.map(value => Math.abs(value)));
+      const xScale = x => pad.left + ((x - minX) / Math.max(1e-9, maxX - minX)) * (width - pad.left - pad.right);
+      const yScale = y => pad.top + ((maxAbsY - y) / (2 * maxAbsY)) * (height - pad.top - pad.bottom);
+      const zeroY = yScale(0);
+      const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xScale(point.x).toFixed(2)} ${yScale(point.y).toFixed(2)}`).join(' ');
+      const supportMarks = supports.map(support => {
+        const x = xScale(support.x);
+        return `<line class="grid-line" x1="${x}" y1="${pad.top}" x2="${x}" y2="${height - pad.bottom}"></line><text x="${x - 4}" y="${height - 18}">${escapeHtml(support.name)}</text>`;
+      }).join('');
+      const labelPoints = selectDiagramLabels(points, maxAbsY);
+      const labels = labelPoints
+        .map((point, index) => {
+          const x = xScale(point.x) + 4;
+          // Offset zero labels so they don't overlap with small values like 3.39
+          const isZero = Math.abs(point.y) < 1e-4;
+          const yOffset = isZero ? 14 : (index % 2 === 0 ? -8 : 16);
+          const y = yScale(point.y) + yOffset;
+          return `<text x="${x}" y="${y}">${Number(point.y).toFixed(2)}</text>`;
+        })
+        .join('');
+      return `
+        <svg class="diagram" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}">
+          <line class="axis" x1="${pad.left}" y1="${zeroY}" x2="${width - pad.right}" y2="${zeroY}"></line>
+          <line class="axis" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}"></line>
+          ${supportMarks}
+          <path class="curve" d="${path}" stroke="${color}"></path>
+          ${labels}
+          <text x="${pad.left}" y="15">${label}</text>
+        </svg>
+      `;
+    }
+
+    function selectDiagramLabels(points, maxAbsY) {
+      const selected = [];
+      const seen = new Set();
+      points.forEach((point, index) => {
+        const isSupport = currentResults.diagrams.supports.some(support => Math.abs(support.x - point.x) < 1e-6);
+        const isExtreme = Math.abs(Math.abs(point.y) - maxAbsY) < 1e-6;
+        const isZero = Math.abs(point.y) < 1e-6;
+        const isKey = Boolean(point.key);
+        if (index === 0 || index === points.length - 1 || isSupport || isExtreme || isZero || isKey) {
+          const key = `${point.x.toFixed(4)}:${point.y.toFixed(4)}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            selected.push(point);
+          }
+        }
+      });
+      return selected;
+    }
+
+    function renderFbdCalculations() {
+      const spans = currentResults.beam?.spans;
+      if (!spans || spans.length === 0) return '<p class="formula">No data.</p>';
+      
+      return spans.map(span => {
+        const mlStr = Number(span.ml).toFixed(3);
+        const mrStr = Number(span.mr).toFixed(3);
+        const mlNum = Number(span.ml);
+        const mrNum = Number(span.mr);
+        
+        // Define SVG dimensions
+        const w = 400, h = 180;
+        const pad = 60;
+        const beamY = 100;
+        
+        // Helper to draw curved moment arrows
+        // If moment is positive (clockwise), draw clockwise arrow. If negative, draw CCW.
+        const drawMoment = (x, isLeft, value) => {
+          if (Math.abs(value) < 1e-4) return '';
+          const isCw = value > 0;
+          // SVG arc: A rx ry x-axis-rotation large-arc-flag sweep-flag x y
+          // Left side: start from top, go right and down.
+          const radius = 16;
+          const startX = isLeft ? x - 10 : x - 10;
+          const sweep = isCw ? 1 : 0;
+          const endX = isLeft ? x + 10 : x + 10;
+          const color = '#dfbe00'; // Match video yellow highlight
+          const path = isCw
+             ? `M ${startX} ${beamY - 5} A ${radius} ${radius} 0 1 1 ${endX} ${beamY - 5}`
+             : `M ${endX} ${beamY - 5} A ${radius} ${radius} 0 1 0 ${startX} ${beamY - 5}`;
+             
+          const arrowHead = isCw
+             ? `<polygon points="${endX-4},${beamY - 12} ${endX+6},${beamY - 5} ${endX-6},${beamY}" fill="${color}"/>`
+             : `<polygon points="${startX+4},${beamY - 12} ${startX-6},${beamY - 5} ${startX+6},${beamY}" fill="${color}"/>`;
+             
+          return `
+            <path d="${path}" fill="none" stroke="${color}" stroke-width="3" />
+            ${arrowHead}
+            <rect x="${x - 30}" y="${beamY - 45}" width="60" height="20" fill="#ffeb3b" opacity="0.4"/>
+            <text x="${x}" y="${beamY - 32}" text-anchor="middle" font-weight="bold" font-size="12">${Math.abs(value).toFixed(3)} kN&middot;m</text>
+          `;
+        };
+
+        const loadMoment = Number(span.load_moment);
+        const totalLoad = Number(span.total_load);
+        const rl = Number(span.left_reaction);
+        const rr = Number(span.right_reaction);
+        const leftSup = span.left;
+        const rightSup = span.right;
+        
+        let pointLoadsHtml = '';
+        if (span.point_loads && span.point_loads.length > 0) {
+            pointLoadsHtml = span.point_loads.map(p => {
+               const px = pad + (p.distance / span.length) * (w - 2 * pad);
+               return `<line x1="${px}" y1="${beamY - 40}" x2="${px}" y2="${beamY - 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-red)"/>
+                       <text x="${px}" y="${beamY - 45}" text-anchor="middle">${p.load} kN</text>`;
+            }).join('');
+        }
+        
+        let udlHtml = '';
+        if (span.udl > 0) {
+            udlHtml = `<rect x="${pad}" y="${beamY - 12}" width="${w - 2 * pad}" height="12" fill="#4caf50" opacity="0.5"/>
+                       <text x="${w/2}" y="${beamY - 18}" text-anchor="middle" font-size="12" fill="#1b5e20">${span.udl} kN/m</text>`;
+        }
+
+        const fbdSvg = `
+          <svg viewBox="0 0 ${w} ${h}" style="max-width: 400px; background: #fff; border: 1px solid #e5eaf0; border-radius: 4px; margin-bottom: 12px; font-family: 'Comic Sans MS', cursive, sans-serif;">
+            <!-- Beam -->
+            <line x1="${pad}" y1="${beamY}" x2="${w - pad}" y2="${beamY}" stroke="#333" stroke-width="3" />
+            
+            <!-- Nodes -->
+            <text x="${pad - 15}" y="${beamY + 5}" font-size="14" font-weight="bold">${leftSup}</text>
+            <text x="${w - pad + 15}" y="${beamY + 5}" font-size="14" font-weight="bold">${rightSup}</text>
+            
+            <!-- Moments -->
+            ${drawMoment(pad, true, mlNum)}
+            ${drawMoment(w - pad, false, mrNum)}
+            
+            <!-- Loads -->
+            ${udlHtml}
+            ${pointLoadsHtml}
+            
+            <!-- Reactions -->
+            <line x1="${pad}" y1="${beamY + 30}" x2="${pad}" y2="${beamY + 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-blue)"/>
+            <rect x="${pad - 15}" y="${beamY + 35}" width="30" height="20" fill="#ffeb3b" opacity="0.4"/>
+            <text x="${pad}" y="${beamY + 50}" text-anchor="middle" font-weight="bold" font-size="13">R_${leftSup}</text>
+            
+            <line x1="${w - pad}" y1="${beamY + 30}" x2="${w - pad}" y2="${beamY + 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-blue)"/>
+            <rect x="${w - pad - 15}" y="${beamY + 35}" width="30" height="20" fill="#00bcd4" opacity="0.4"/>
+            <text x="${w - pad}" y="${beamY + 50}" text-anchor="middle" font-weight="bold" font-size="13">R_${rightSup}</text>
+            
+            <!-- Dimension line -->
+            <line x1="${pad}" y1="${beamY + 70}" x2="${w - pad}" y2="${beamY + 70}" stroke="#777" stroke-width="1" />
+            <line x1="${pad}" y1="${beamY + 65}" x2="${pad}" y2="${beamY + 75}" stroke="#777" stroke-width="1" />
+            <line x1="${w - pad}" y1="${beamY + 65}" x2="${w - pad}" y2="${beamY + 75}" stroke="#777" stroke-width="1" />
+            <rect x="${w/2 - 20}" y="${beamY + 60}" width="40" height="15" fill="#ffeb3b" opacity="0.4"/>
+            <text x="${w/2}" y="${beamY + 74}" text-anchor="middle" font-size="12">${span.length} m</text>
+          </svg>
+        `;
+
+        const momentEq = `\\( \\Sigma M_{@${leftSup}} = 0 \\quad \\circlearrowright + \\)`;
+        
+        let momentExpression = `${mlStr} \\text{ (M_L)} `;
+        if (loadMoment !== 0) {
+             momentExpression += `+ ${loadMoment.toFixed(3)} \\text{ (Loads)} `;
+        }
+        momentExpression += `+ ${mrStr} \\text{ (M_R)} - R_${rightSup} \\times ${span.length} = 0`;
+
+        const forceEq = `\\( \\Sigma F_y = 0 \\quad \\uparrow + \\)`;
+        const forceExpression = `R_${leftSup} - ${totalLoad.toFixed(3)} \\text{ (Loads)} + ${rr.toFixed(3)} \\text{ (R_${rightSup})} = 0`;
+
+        return `
+        <div style="margin-bottom: 24px; padding: 16px; background: #fafafa; border: 1px solid var(--line); border-radius: 8px;">
+          <h3 style="margin: 0 0 12px; font-size: 16px; font-family: 'Comic Sans MS', cursive, sans-serif;">FBD of segment ${span.name}</h3>
+          ${fbdSvg}
+          <div style="display: grid; gap: 12px; font-size: 15px;">
+             <div>
+                <div>${momentEq}</div>
+                <div style="margin-top: 8px;">\\( \\Rightarrow ${momentExpression} \\)</div>
+                <div style="margin-top: 8px;">\\( \\Rightarrow R_${rightSup} = \\mathbf{${rr.toFixed(2)}\\text{ kN}} \\)</div>
+             </div>
+             <hr style="border: 0; border-top: 1px dashed #ccc; width: 100%; margin: 4px 0;">
+             <div>
+                <div>${forceEq}</div>
+                <div style="margin-top: 8px;">\\( \\Rightarrow ${forceExpression} \\)</div>
+                <div style="margin-top: 8px;">\\( \\Rightarrow R_${leftSup} = \\mathbf{${rl.toFixed(2)}\\text{ kN}} \\)</div>
+             </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderSupportReactionCalculations(rows) {
+      if (!rows || rows.length === 0) return '<p class="formula">No data.</p>';
+      let html = '<div style="display: grid; gap: 10px;">';
+      for (const row of rows) {
+        html += `<div style="padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 6px;">
+          <strong style="display: inline-block; width: 80px; font-size: 14px;">Support ${escapeHtml(row[0])}</strong> 
+          <span style="color: var(--muted);">${escapeHtml(row[2])} = </span> <strong>${escapeHtml(row[3])}</strong>
+          <div style="font-size: 13px; color: var(--muted); margin-top: 6px;">Contributions from adjacent spans: ${escapeHtml(row[1])}</div>
+        </div>`;
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function typesetMath() {
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([outputEl]).catch(() => {});
+      } else {
+        setTimeout(() => {
+          if (!(window.MathJax && window.MathJax.typesetPromise)) {
+            applyMathFallback(outputEl);
+          }
+        }, 800);
+      }
     }
 
     function escapeHtml(value) {
       return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
+    }
+
+    function formatCell(value) {
+      return escapeHtml(value);
+    }
+
+    function applyMathFallback(root) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      while (walker.nextNode()) {
+        if (walker.currentNode.nodeValue.includes('\\(')) textNodes.push(walker.currentNode);
+      }
+      textNodes.forEach(node => {
+        const wrapper = document.createElement('span');
+        wrapper.innerHTML = escapeHtml(node.nodeValue).replace(/\\\((.*?)\\\)/g, (_match, formula) => `<span class="math-fallback">${latexFallback(formula)}</span>`);
+        node.parentNode.replaceChild(wrapper, node);
+      });
+    }
+
+    function latexFallback(formula) {
+      return escapeHtml(formula)
+        .replaceAll('\\Sigma', 'Σ')
+        .replaceAll('\\sum', 'Σ')
+        .replaceAll('\\int', '∫')
+        .replaceAll('\\le', '≤')
+        .replaceAll('\\,', ' ')
+        .replaceAll('_L', '<sub>L</sub>')
+        .replaceAll('_R', '<sub>R</sub>')
+        .replaceAll('_left', '<sub>left</sub>')
+        .replaceAll('_right', '<sub>right</sub>')
+        .replaceAll('^2', '<sup>2</sup>');
     }
 
     document.getElementById('calculate').addEventListener('click', () => {
@@ -709,7 +1552,7 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
         spans.append(Span(left=left, right=right, length=length, udl=udl, point_loads=point_loads))
 
     fixed_supports = {supports[0], supports[-1]} if bool(payload.get("exterior_fixed", True)) else set()
-    distribution_rows, distribution_factors, joint_ends, opposite = build_distribution_rows(
+    distribution_rows, distribution_factors, joint_ends, opposite = build_standard_distribution_rows(
         spans,
         supports,
         fixed_supports,
@@ -724,6 +1567,7 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
         tolerance,
         max_cycles,
     )
+    analysis = analysis_from_final_moments(spans, supports, final_moments)
 
     return {
         "status": (
@@ -732,7 +1576,7 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
         ),
         "tables": {
             "distribution": {
-                "headers": ["Joint", "Span", "Member end", "Relative stiffness 1/L", "Joint sum", "Distribution factor"],
+                "headers": ["Joints", "Member", "Stiffness (k)", "\\(\\Sigma k\\)", "DF"],
                 "rows": distribution_rows,
             },
             "fem": {
@@ -740,11 +1584,57 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
                 "rows": [row for span in spans for row in span.fixed_end_detail_rows()],
             },
             "moment": {"headers": md_headers, "rows": md_rows},
+            "reactions": {
+                "headers": ["Support", "Span", "Component", "Reaction"],
+                "rows": analysis["reaction_rows"],
+            },
+            "support_reactions": {
+                "headers": ["Support", "Total vertical reaction"],
+                "rows": analysis["support_rows"],
+            },
+            "support_reaction_calculations": {
+                "headers": ["Support", "Span-end reaction parts", "Summation", "Total reaction"],
+                "rows": analysis["support_reaction_calc_rows"],
+            },
+            "reaction_calculations": {
+                "headers": ["Span", "Calculation", "Formula", "Substitution", "Value"],
+                "rows": analysis["reaction_calc_rows"],
+            },
+            "shear_calculations": {
+                "headers": ["Span", "Formula", "Substitution"],
+                "rows": analysis["shear_calc_rows"],
+            },
+            "bending_calculations": {
+                "headers": ["Span", "Formula", "Substitution"],
+                "rows": analysis["bending_calc_rows"],
+            },
+            "equilibrium_checks": {
+                "headers": ["Location", "Check", "Formula", "Substitution", "Residual", "Status"],
+                "rows": analysis["equilibrium_rows"],
+            },
+            "station_values": {
+                "headers": ["Span", "x from left support", "Shear V", "Bending moment M"],
+                "rows": analysis["extrema_rows"],
+            },
+            "shear_values": {
+                "headers": ["Span", "Local x", "Global x", "Shear V"],
+                "rows": analysis["shear_value_rows"],
+            },
+            "moment_values": {
+                "headers": ["Span", "Local x", "Global x", "Bending moment M"],
+                "rows": analysis["moment_value_rows"],
+            },
+            "extrema": {
+                "headers": ["Result", "Span", "x from left support", "Value"],
+                "rows": analysis["summary_rows"],
+            },
             "support": {
                 "headers": ["Support", "Member-end moments", "Algebraic joint sum"],
                 "rows": support_moment_rows(supports, joint_ends, final_moments),
             },
         },
+        "diagrams": analysis["diagrams"],
+        "beam": analysis["beam"],
     }
 
 
