@@ -1104,6 +1104,11 @@ APP_HTML = r"""<!doctype html>
           <div>
             <h2 class="subheading">Maximum Values</h2>
             ${buildTable(currentResults.tables.extrema.headers, currentResults.tables.extrema.rows)}
+            <div style="font-size: 13px; color: var(--text); margin-top: 10px; line-height: 1.5; background: #fff8e6; padding: 12px; border: 1px solid #ffd54f; border-radius: 6px;">
+              <strong style="color: #b78103;">💡 Design Note:</strong><br>
+              &bull; Use <strong>Maximum absolute shear</strong> for the shear design of the beam itself (sizing vertical stirrups/links).<br>
+              &bull; Use <strong>Maximum support reaction</strong> for designing the supporting elements (sizing columns, walls, or checking bearing pressure).
+            </div>
           </div>
           <div>
             <h2 class="subheading">Shear Force Diagram</h2>
