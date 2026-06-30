@@ -588,7 +588,9 @@ def analysis_from_final_moments(
     summary_rows = [
         ["Maximum absolute shear", max_shear["span"], money(max_shear["x"]), money(max_shear["value"])],
         ["Maximum absolute bending moment", max_moment["span"], money(max_moment["x"]), money(max_moment["value"])],
+        ["Maximum support reaction", max(support_reactions.items(), key=lambda item: abs(item[1]))[0], "Support", money(max(support_reactions.values(), key=abs))] if supports else [],
     ]
+    summary_rows = [row for row in summary_rows if row]
 
     return {
         "reaction_rows": reaction_rows,
@@ -883,6 +885,7 @@ APP_HTML = r"""<!doctype html>
           <div>
             <label>&nbsp;</label>
             <label><input id="exteriorFixed" type="checkbox" checked> Exterior supports fixed</label>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Leave unchecked if exterior supports are pins/rollers (not strictly fixed).</div>
           </div>
         </div>
       </div>
@@ -1101,11 +1104,6 @@ APP_HTML = r"""<!doctype html>
           <div>
             <h2 class="subheading">Maximum Values</h2>
             ${buildTable(currentResults.tables.extrema.headers, currentResults.tables.extrema.rows)}
-          </div>
-          <div>
-            <h2 class="subheading">Equilibrium Checks</h2>
-            <p class="formula">The reactions are calculated from final span end moments, so each span is checked with \\(R_L+R_R-\\Sigma W=0\\). Residual joint moment is checked separately with \\(\\Sigma M_{joint}\\).</p>
-            ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
           </div>
           <div>
             <h2 class="subheading">Shear Force Diagram</h2>
@@ -1380,7 +1378,16 @@ APP_HTML = r"""<!doctype html>
         
         let momentExpression = `${mlStr} \\text{ (M_L)} `;
         if (loadMoment !== 0) {
-             momentExpression += `+ ${loadMoment.toFixed(3)} \\text{ (Loads)} `;
+             let loadFormulas = [];
+             if (span.udl > 0) {
+                 loadFormulas.push(`(${span.udl} \\times ${span.length} \\times ${span.length / 2})`);
+             }
+             if (span.point_loads && span.point_loads.length > 0) {
+                 span.point_loads.forEach(p => {
+                     loadFormulas.push(`(${p.load} \\times ${p.distance})`);
+                 });
+             }
+             momentExpression += `+ [${loadFormulas.join(' + ')}] \\text{ (Loads)} `;
         }
         momentExpression += `+ ${mrStr} \\text{ (M_R)} - R_${rightSup} \\times ${span.length} = 0`;
 
