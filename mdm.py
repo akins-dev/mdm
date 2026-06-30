@@ -383,6 +383,7 @@ def analysis_from_final_moments(
     bending_calc_rows: List[List[str]] = []
     extrema_rows: List[List[str]] = []
     equilibrium_rows: List[List[str]] = []
+    zero_shear_calcs: List[Dict[str, object]] = []
     support_reactions = {support: 0.0 for support in supports}
     support_reaction_parts = {support: [] for support in supports}
     shear_points: List[Dict[str, object]] = []
@@ -433,12 +434,24 @@ def analysis_from_final_moments(
         )
 
         station_candidates = span_station_candidates(span, final_moments, left_reaction)
-        for x in station_candidates:
-            shear = shear_at(span, left_reaction, x, after_point_loads=True)
-            moment = moment_at(span, final_moments, left_reaction, x)
+        for l_val in station_candidates:
+            shear = shear_at(span, left_reaction, l_val, after_point_loads=True)
+            moment = moment_at(span, final_moments, left_reaction, l_val)
             if abs(moment) > abs(max_moment["value"]):
-                max_moment = {"span": span.name, "x": x, "value": moment}
-            extrema_rows.append([span.name, money(x), money(shear), money(moment)])
+                max_moment = {"span": span.name, "x": l_val, "value": moment}
+            extrema_rows.append([span.name, money(l_val), money(shear), money(moment)])
+            
+            if 0.0 < l_val < span.length and not any(math.isclose(l_val, pt[1], abs_tol=1e-6) for pt in span.point_loads):
+                if math.isclose(shear_at(span, left_reaction, l_val), 0.0, abs_tol=1e-6) and span.udl > 0:
+                    start_val = max([0.0] + [pt[1] for pt in span.point_loads if pt[1] < l_val])
+                    shear_start = shear_at(span, left_reaction, start_val, after_point_loads=True)
+                    zero_shear_calcs.append({
+                        "span": span.name,
+                        "start": start_val,
+                        "v_start": shear_start,
+                        "udl": span.udl,
+                        "root": l_val
+                    })
 
         shear_checks = [(0.0, True), (span.length, True)]
         for _load, distance in span.point_loads:
@@ -643,6 +656,7 @@ def analysis_from_final_moments(
             "spans": span_infos,
             "supports": support_positions,
             "support_reactions": support_reactions,
+            "zero_shear_calcs": zero_shear_calcs,
         },
     }
 
@@ -941,6 +955,46 @@ APP_HTML = r"""<!doctype html>
     const statusEl = document.getElementById('status');
     const tabsEl = document.getElementById('tabs');
     const outputEl = document.getElementById('output');
+    
+    const renderZeroShear = (calcs) => {
+        if (!calcs || calcs.length === 0) return '';
+        let html = '<h2 class="subheading" style="margin-top: 30px;">Points of Zero Shear (Max Bending Moment Locations)</h2>';
+        calcs.forEach(calc => {
+            html += `
+            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
+                <div style="flex: 1;">
+                    <strong>Span ${escapeHtml(calc.span)}</strong><br>
+                    The shear force crosses zero at distance \\(l_{zero}\\) from the start of the span.<br>
+                    By similar triangles (or setting \\(V=0\\)):<br>
+                    \\( l_{zero} = l_{start} + \\frac{V_{start}}{w} \\)<br>
+                    \\( l_{zero} = ${calc.start.toFixed(4)} + \\frac{${calc.v_start.toFixed(4)}}{${calc.udl.toFixed(4)}} = \\mathbf{${calc.root.toFixed(4)} \\text{ m}} \\)
+                </div>
+                <div style="flex: 1;">
+                    <svg width="300" height="120" viewBox="-10 -10 310 130">
+                        <!-- Horizontal Axis -->
+                        <line x1="0" y1="50" x2="280" y2="50" stroke="#ccc" stroke-width="2"/>
+                        <!-- Start Point Marker -->
+                        <line x1="40" y1="45" x2="40" y2="55" stroke="#333"/>
+                        <!-- Zero Crossing Marker -->
+                        <line x1="200" y1="45" x2="200" y2="55" stroke="#1890ff" stroke-width="2"/>
+                        <!-- Text Labels -->
+                        <text x="45" y="15" font-size="12" fill="#ff4d4f" text-anchor="start">V=${calc.v_start.toFixed(4)}</text>
+                        <text x="40" y="68" font-size="12" fill="#666" text-anchor="middle">l=${calc.start.toFixed(4)}</text>
+                        <text x="200" y="40" font-size="12" font-weight="bold" fill="#1890ff" text-anchor="middle">V=0</text>
+                        <text x="200" y="68" font-size="12" font-weight="bold" fill="#1890ff" text-anchor="middle">l=${calc.root.toFixed(4)}</text>
+                        <text x="120" y="45" font-size="11" fill="#666" text-anchor="middle">Dist = ${calc.v_start.toFixed(4)}/${calc.udl.toFixed(4)}</text>
+                        <!-- Area shading -->
+                        <polygon points="40,50 200,50 40,10" fill="rgba(255, 77, 79, 0.1)"/>
+                        <!-- Shear Line (Extended slightly past zero) -->
+                        <line x1="40" y1="10" x2="240" y2="60" stroke="#ff4d4f" stroke-width="2"/>
+                    </svg>
+                </div>
+            </div>
+            `;
+        });
+        return html;
+    };
+
     let currentResults = null;
     let activeTab = 'distribution';
 
@@ -978,11 +1032,11 @@ APP_HTML = r"""<!doctype html>
         row.innerHTML = `
           <div class="span-name">${name}</div>
           <div>
-            <label>Length L</label>
+            <label>Length L (m)</label>
             <input class="length" type="text" value="${escapeAttr(previous.length)}">
           </div>
           <div>
-            <label>UDL w</label>
+            <label>UDL w (kN/m)</label>
             <input class="udl" type="text" value="${escapeAttr(previous.udl)}">
           </div>
           <div class="points">
@@ -1091,8 +1145,11 @@ APP_HTML = r"""<!doctype html>
               <h2 class="subheading">Equilibrium Checks</h2>
               <p class="formula">A zero residual means the check is balanced. Nonzero residuals are shown in red.</p>
               ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
-              <div style="font-size: 13px; color: var(--muted); margin-top: 8px;">
-                <strong>Legend:</strong> \\(R_L\\) = Left Span Reaction, \\(R_R\\) = Right Span Reaction, \\(\\Sigma W\\) = Total downward force (UDL + Point Loads), \\(\\Sigma M_{joint}\\) = Sum of member-end moments at a joint.
+              <div style="font-size: 13px; color: var(--text); margin-top: 10px; line-height: 1.5; background: #e6f7ff; padding: 12px; border: 1px solid #91d5ff; border-radius: 6px;">
+                <strong style="color: #0050b3;">ℹ️ Legend:</strong><br>
+                &bull; \\(R_L\\) = Left Span Reaction, &bull; \\(R_R\\) = Right Span Reaction<br>
+                &bull; \\(\\Sigma W\\) = Total downward force (UDL + Point Loads)<br>
+                &bull; \\(\\Sigma M_{joint}\\) = Sum of member-end moments at a joint.
               </div>
             </div>
           </div>
@@ -1126,6 +1183,9 @@ APP_HTML = r"""<!doctype html>
     function renderDiagrams() {
       return `
         <div class="stack">
+          <div style="font-size: 13px; color: var(--text); margin-bottom: 15px; background: #f6ffed; padding: 12px; border: 1px solid #b7eb8f; border-radius: 6px;">
+            <strong style="color: #389e0d;">📏 Standard Units Used:</strong> Length = meters (m), Force/Load = Kilonewtons (kN), UDL = kN/m, Bending Moment = Kilonewton-meters (kNm).
+          </div>
           <div>
             <h2 class="subheading">Beam, Loads, and Support Reactions</h2>
             ${drawBeamSketch()}
@@ -1133,12 +1193,6 @@ APP_HTML = r"""<!doctype html>
           <div>
             <h2 class="subheading">Maximum Values</h2>
             ${buildTable(currentResults.tables.extrema.headers, currentResults.tables.extrema.rows)}
-            <div style="font-size: 13px; color: var(--text); margin-top: 10px; line-height: 1.5; background: #fff8e6; padding: 12px; border: 1px solid #ffd54f; border-radius: 6px;">
-              <strong style="color: #b78103;">💡 Design Note:</strong><br>
-              &bull; Use <strong>Maximum absolute shear</strong> for the shear design of the beam itself (sizing vertical stirrups/links).<br>
-              &bull; Use <strong>Maximum support reaction</strong> for designing the supporting elements (sizing columns, walls, or checking bearing pressure).<br>
-              &bull; <strong>"x from left support"</strong> is simply the distance (in meters) measured starting from the left end of that specific span.
-            </div>
           </div>
           <div>
             <h2 class="subheading">Shear Force Diagram</h2>
@@ -1146,27 +1200,18 @@ APP_HTML = r"""<!doctype html>
             ${drawDiagram(currentResults.diagrams.shear, currentResults.diagrams.supports, '#1264a3', 'SFD')}
           </div>
           <div>
-            <h2 class="subheading">Bending Moment Diagram</h2>
-            <p class="formula">Bending moment is calculated from the area under the shear force diagram: \\(M(x)=M_L+\\int_0^x V(s)\\,ds\\).</p>
+            <h2 class="subheading">Diagrams</h2>
+            <p class="formula">Bending moment is calculated progressively from the area under the shear force diagram: \\( M_{station} = M_{prev} + \\text{Area}_{SFD} = M_{prev} + \\frac{1}{2}(V_{start} + V_{end})\\Delta l \\)</p>
             ${drawDiagram(currentResults.diagrams.moment, currentResults.diagrams.supports, '#b42318', 'BMD')}
           </div>
           <div>
             <h2 class="subheading">Shear Calculations</h2>
             ${buildTable(currentResults.tables.shear_calculations.headers, currentResults.tables.shear_calculations.rows)}
-            <div style="font-size: 13px; color: var(--muted); margin-top: 8px;">
-              <strong>Legend:</strong> \\(V(l)\\) = Internal Shear Force, \\(R_L\\) = Left Reaction, \\(w\\) = UDL, \\(l\\) = Distance from left support, \\(\\Sigma P\\) = Sum of point loads.
-            </div>
+            ${renderZeroShear(currentResults.beam.zero_shear_calcs)}
           </div>
           <div>
             <h2 class="subheading">Bending Moment Calculations</h2>
             ${buildTable(currentResults.tables.bending_calculations.headers, currentResults.tables.bending_calculations.rows)}
-            <div style="font-size: 13px; color: var(--muted); margin-top: 8px;">
-              <strong>Note:</strong> The bending moment calculated here is the <em>internal</em> bending moment. For a simply supported (pinned/roller) end, the internal moment is naturally 0. At fixed supports or continuous interior supports, the internal moment matches the non-zero member-end moment (\\(M_L\\) or \\(M_R\\)) required for continuity.
-            </div>
-          </div>
-          <div>
-            <h2 class="subheading">Station Values</h2>
-            ${buildTable(currentResults.tables.station_values.headers, currentResults.tables.station_values.rows)}
           </div>
         </div>
       `;
@@ -1277,7 +1322,6 @@ APP_HTML = r"""<!doctype html>
       const labels = labelPoints
         .map((point, index) => {
           const x = xScale(point.x) + 4;
-          // Offset zero labels so they don't overlap with small values like 3.39
           const isZero = Math.abs(point.y) < 1e-4;
           const yOffset = isZero ? 14 : (index % 2 === 0 ? -8 : 16);
           const y = yScale(point.y) + yOffset;
@@ -1325,23 +1369,18 @@ APP_HTML = r"""<!doctype html>
         const mlNum = Number(span.ml);
         const mrNum = Number(span.mr);
         
-        // Define SVG dimensions
         const w = 400, h = 180;
         const pad = 60;
         const beamY = 100;
         
-        // Helper to draw curved moment arrows
-        // If moment is positive (clockwise), draw clockwise arrow. If negative, draw CCW.
         const drawMoment = (x, isLeft, value) => {
           if (Math.abs(value) < 1e-4) return '';
           const isCw = value > 0;
-          // SVG arc: A rx ry x-axis-rotation large-arc-flag sweep-flag x y
-          // Left side: start from top, go right and down.
           const radius = 16;
           const startX = isLeft ? x - 10 : x - 10;
           const sweep = isCw ? 1 : 0;
           const endX = isLeft ? x + 10 : x + 10;
-          const color = '#dfbe00'; // Match video yellow highlight
+          const color = '#dfbe00'; 
           const path = isCw
              ? `M ${startX} ${beamY - 5} A ${radius} ${radius} 0 1 1 ${endX} ${beamY - 5}`
              : `M ${endX} ${beamY - 5} A ${radius} ${radius} 0 1 0 ${startX} ${beamY - 5}`;
@@ -1354,7 +1393,7 @@ APP_HTML = r"""<!doctype html>
             <path d="${path}" fill="none" stroke="${color}" stroke-width="3" />
             ${arrowHead}
             <rect x="${x - 30}" y="${beamY - 45}" width="60" height="20" fill="#ffeb3b" opacity="0.4"/>
-            <text x="${x}" y="${beamY - 32}" text-anchor="middle" font-weight="bold" font-size="12">${Math.abs(value).toFixed(3)} kN&middot;m</text>
+            <text x="${x}" y="${beamY - 32}" text-anchor="middle" font-weight="bold" font-size="12">${Math.abs(value).toFixed(3)}</text>
           `;
         };
 
@@ -1370,48 +1409,31 @@ APP_HTML = r"""<!doctype html>
             pointLoadsHtml = span.point_loads.map(p => {
                const px = pad + (p.distance / span.length) * (w - 2 * pad);
                return `<line x1="${px}" y1="${beamY - 40}" x2="${px}" y2="${beamY - 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-red)"/>
-                       <text x="${px}" y="${beamY - 45}" text-anchor="middle">${p.load} kN</text>`;
+                       <text x="${px}" y="${beamY - 45}" text-anchor="middle">${p.load}</text>`;
             }).join('');
         }
         
         let udlHtml = '';
         if (span.udl > 0) {
             udlHtml = `<rect x="${pad}" y="${beamY - 12}" width="${w - 2 * pad}" height="12" fill="#4caf50" opacity="0.5"/>
-                       <text x="${w/2}" y="${beamY - 18}" text-anchor="middle" font-size="12" fill="#1b5e20">${span.udl} kN/m</text>`;
+                       <text x="${w/2}" y="${beamY - 18}" text-anchor="middle" font-size="12" fill="#1b5e20">${span.udl}</text>`;
         }
 
         const fbdSvg = `
-          <svg viewBox="0 0 ${w} ${h}" style="max-width: 400px; background: #fff; border: 1px solid #e5eaf0; border-radius: 4px; margin-bottom: 12px; font-family: 'Comic Sans MS', cursive, sans-serif;">
-            <!-- Beam -->
+          <svg viewBox="0 0 ${w} ${h}" style="max-width: 400px; background: #fff; border: 1px solid #e5eaf0; border-radius: 4px; margin-bottom: 12px;">
             <line x1="${pad}" y1="${beamY}" x2="${w - pad}" y2="${beamY}" stroke="#333" stroke-width="3" />
-            
-            <!-- Nodes -->
             <text x="${pad - 15}" y="${beamY + 5}" font-size="14" font-weight="bold">${leftSup}</text>
             <text x="${w - pad + 15}" y="${beamY + 5}" font-size="14" font-weight="bold">${rightSup}</text>
-            
-            <!-- Moments -->
             ${drawMoment(pad, true, mlNum)}
             ${drawMoment(w - pad, false, mrNum)}
-            
-            <!-- Loads -->
             ${udlHtml}
             ${pointLoadsHtml}
-            
-            <!-- Reactions -->
             <line x1="${pad}" y1="${beamY + 30}" x2="${pad}" y2="${beamY + 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-blue)"/>
-            <rect x="${pad - 15}" y="${beamY + 35}" width="30" height="20" fill="#ffeb3b" opacity="0.4"/>
-            <text x="${pad}" y="${beamY + 50}" text-anchor="middle" font-weight="bold" font-size="13">R_${leftSup}</text>
-            
+            <text x="${pad}" y="${beamY + 50}" text-anchor="middle" font-size="13">R_${leftSup}</text>
             <line x1="${w - pad}" y1="${beamY + 30}" x2="${w - pad}" y2="${beamY + 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-blue)"/>
-            <rect x="${w - pad - 15}" y="${beamY + 35}" width="30" height="20" fill="#00bcd4" opacity="0.4"/>
-            <text x="${w - pad}" y="${beamY + 50}" text-anchor="middle" font-weight="bold" font-size="13">R_${rightSup}</text>
-            
-            <!-- Dimension line -->
+            <text x="${w - pad}" y="${beamY + 50}" text-anchor="middle" font-size="13">R_${rightSup}</text>
             <line x1="${pad}" y1="${beamY + 70}" x2="${w - pad}" y2="${beamY + 70}" stroke="#777" stroke-width="1" />
-            <line x1="${pad}" y1="${beamY + 65}" x2="${pad}" y2="${beamY + 75}" stroke="#777" stroke-width="1" />
-            <line x1="${w - pad}" y1="${beamY + 65}" x2="${w - pad}" y2="${beamY + 75}" stroke="#777" stroke-width="1" />
-            <rect x="${w/2 - 20}" y="${beamY + 60}" width="40" height="15" fill="#ffeb3b" opacity="0.4"/>
-            <text x="${w/2}" y="${beamY + 74}" text-anchor="middle" font-size="12">${span.length} m</text>
+            <text x="${w/2}" y="${beamY + 84}" text-anchor="middle" font-size="12">${span.length}</text>
           </svg>
         `;
 
@@ -1463,7 +1485,7 @@ APP_HTML = r"""<!doctype html>
         html += `<div style="padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 6px;">
           <strong style="display: inline-block; width: 80px; font-size: 14px;">Support ${escapeHtml(row[0])}</strong> 
           <span style="color: var(--muted);">${escapeHtml(row[2])} = </span> <strong>${escapeHtml(row[3])}</strong>
-          <div style="font-size: 13px; color: var(--muted); margin-top: 6px;">Contributions from adjacent spans: ${escapeHtml(row[1])}</div>
+          <div style="font-size: 13px; color: var(--muted); margin-top: 6px;">Contributions: ${escapeHtml(row[1])}</div>
         </div>`;
       }
       html += '</div>';
@@ -1660,8 +1682,8 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
                 "headers": ["Location", "Check", "Formula", "Substitution", "Residual", "Status"],
                 "rows": analysis["equilibrium_rows"],
             },
-            "station_values": {
-                "headers": ["Span", "l from left support (m)", "Shear V", "Bending moment M"],
+            "extrema": {
+                "headers": ["Result", "Span", "Distance from left support (m)", "Value"],
                 "rows": analysis["extrema_rows"],
             },
             "shear_values": {
