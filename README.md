@@ -1,12 +1,18 @@
 # Moment Distribution Method Calculator
 
-This is a standalone Python CLI program for continuous beam analysis using the
-Hardy Cross moment distribution method.
+This is a standalone Python browser-GUI program for continuous beam analysis
+using the Hardy Cross moment distribution method.
 
 ## Run
 
 ```bash
 python3 mdm.py
+```
+
+Then open the local address printed in the terminal, usually:
+
+```text
+http://127.0.0.1:8000
 ```
 
 ## Inputs
@@ -20,6 +26,20 @@ python3 mdm.py
 
 The program automatically names supports `A`, `B`, `C`, and so on. Spans are
 named from their end supports, such as `AB` and `BC`.
+
+Point loads are entered in the GUI as `P@a`, where `a` is the distance from the
+left support. Separate multiple point loads with semicolons, for example:
+
+```text
+12@2; 8@4.5
+```
+
+## Outputs
+
+- distribution factor table
+- fixed-end moment formula and substitution table
+- moment distribution table
+- final support moment summary
 
 ## Assumptions
 
