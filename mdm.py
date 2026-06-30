@@ -452,39 +452,68 @@ def analysis_from_final_moments(
         shear_calc_rows.append(
             [
                 span.name,
-                "\\(V(x)=R_L-wx-\\Sigma P_{a\\le x}\\)",
-                f"\\(V(x)={money(left_reaction)}-{money(span.udl)}x-\\Sigma P\\)",
+                "\\(V(l)=R_L-wl-\\Sigma P_{a\\le l}\\)",
+                f"\\(V(l)={money(left_reaction)}-{money(span.udl)}l-\\Sigma P\\)",
             ]
         )
-        for x in station_candidates:
-            point_load_sum = sum(load for load, distance in span.point_loads if distance <= x)
+        for l_val in station_candidates:
+            point_load_sum = sum(load for load, distance in span.point_loads if distance <= l_val)
+            l_str = f"\\frac{{{money(span.length)}}}{{2}}" if math.isclose(l_val, span.length / 2, abs_tol=1e-6) else money(l_val)
             shear_calc_rows.append(
                 [
-                    f"{span.name} at x={money(x)}",
-                    "\\(V=R_L-wx-\\Sigma P\\)",
-                    f"\\({money(left_reaction)}-{money(span.udl)}({money(x)})-{money(point_load_sum)}={money(shear_at(span, left_reaction, x))}\\)",
+                    f"{span.name} at l={l_str}",
+                    "\\(V=R_L-wl-\\Sigma P\\)",
+                    f"\\({money(left_reaction)}-{money(span.udl)}({l_str})-{money(point_load_sum)}={money(shear_at(span, left_reaction, l_val))}\\)",
                 ]
             )
         bending_calc_rows.append(
             [
                 span.name,
-                "\\(M(x)=M_L+\\int_0^x V(s)\\,ds\\)",
-                f"\\(M(x)={money(final_moments[span.left_end])}+{money(left_reaction)}x-{money(span.udl)}x^2/2-\\Sigma P(x-a)\\)",
+                "\\(M(l)=M_{prev}+\\text{Area of SFD}\\)",
+                "\\(M(l)=M_{prev} + \\frac{1}{2}(V_{start} + V_{end})\\Delta l\\)",
             ]
         )
-        for x in station_candidates:
-            point_terms = sum(load * (x - distance) for load, distance in span.point_loads if x >= distance)
+        
+        stations = sorted(list(set(station_candidates)))
+        prev_l = 0.0
+        prev_M = final_moments[span.left_end]
+        
+        bending_calc_rows.append(
+            [
+                f"{span.name} at l=0",
+                "\\(M(0)=M_L\\)",
+                f"\\({money(prev_M)}\\)",
+            ]
+        )
+        
+        for l_val in stations:
+            if l_val == 0.0:
+                continue
+            
+            v_start = shear_at(span, left_reaction, prev_l, after_point_loads=True)
+            v_end = shear_at(span, left_reaction, l_val, after_point_loads=False)
+            dl = l_val - prev_l
+            area = 0.5 * (v_start + v_end) * dl
+            current_M = prev_M + area
+            
+            dl_str = f"\\frac{{{money(span.length)}}}{{2}}" if math.isclose(dl, span.length / 2, abs_tol=1e-6) else money(dl)
+            l_str = f"\\frac{{{money(span.length)}}}{{2}}" if math.isclose(l_val, span.length / 2, abs_tol=1e-6) else money(l_val)
+            prev_l_str = f"\\frac{{{money(span.length)}}}{{2}}" if math.isclose(prev_l, span.length / 2, abs_tol=1e-6) else money(prev_l)
+            
+            if span.udl == 0 and math.isclose(v_start, v_end, abs_tol=1e-6):
+                area_term = f"{money(v_start)}({dl_str})"
+            else:
+                area_term = f"\\frac{{1}}{{2}}({money(v_start)} + {money(v_end)})({dl_str})"
+                
             bending_calc_rows.append(
                 [
-                    f"{span.name} at x={money(x)}",
-                    "\\(M=M_L+R_Lx-wx^2/2-\\Sigma P(x-a)\\)",
-                    (
-                        f"\\({money(final_moments[span.left_end])}+{money(left_reaction)}({money(x)})-"
-                        f"{money(span.udl)}({money(x)})^2/2-{money(point_terms)}="
-                        f"{money(moment_at(span, final_moments, left_reaction, x))}\\)"
-                    ),
+                    f"{span.name} at l={l_str}",
+                    f"\\(M({l_str}) = M({prev_l_str}) + \\text{{Area}}\\)",
+                    f"\\({money(prev_M)} + {area_term} = {money(current_M)}\\)",
                 ]
             )
+            prev_l = l_val
+            prev_M = current_M
 
         span_shear_points, span_moment_points = diagram_points(span, final_moments, left_reaction, global_x)
         shear_points.extend(span_shear_points)
@@ -1062,6 +1091,9 @@ APP_HTML = r"""<!doctype html>
               <h2 class="subheading">Equilibrium Checks</h2>
               <p class="formula">A zero residual means the check is balanced. Nonzero residuals are shown in red.</p>
               ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
+              <div style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+                <strong>Legend:</strong> \\(R_L\\) = Left Span Reaction, \\(R_R\\) = Right Span Reaction, \\(\\Sigma W\\) = Total downward force (UDL + Point Loads), \\(\\Sigma M_{joint}\\) = Sum of member-end moments at a joint.
+              </div>
             </div>
           </div>
         `;
@@ -1121,10 +1153,16 @@ APP_HTML = r"""<!doctype html>
           <div>
             <h2 class="subheading">Shear Calculations</h2>
             ${buildTable(currentResults.tables.shear_calculations.headers, currentResults.tables.shear_calculations.rows)}
+            <div style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+              <strong>Legend:</strong> \\(V(l)\\) = Internal Shear Force, \\(R_L\\) = Left Reaction, \\(w\\) = UDL, \\(l\\) = Distance from left support, \\(\\Sigma P\\) = Sum of point loads.
+            </div>
           </div>
           <div>
             <h2 class="subheading">Bending Moment Calculations</h2>
             ${buildTable(currentResults.tables.bending_calculations.headers, currentResults.tables.bending_calculations.rows)}
+            <div style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+              <strong>Note:</strong> The bending moment calculated here is the <em>internal</em> bending moment. For a simply supported (pinned/roller) end, the internal moment is naturally 0. At fixed supports or continuous interior supports, the internal moment matches the non-zero member-end moment (\\(M_L\\) or \\(M_R\\)) required for continuity.
+            </div>
           </div>
           <div>
             <h2 class="subheading">Station Values</h2>
@@ -1623,11 +1661,11 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
                 "rows": analysis["equilibrium_rows"],
             },
             "station_values": {
-                "headers": ["Span", "x from left support", "Shear V", "Bending moment M"],
+                "headers": ["Span", "l from left support (m)", "Shear V", "Bending moment M"],
                 "rows": analysis["extrema_rows"],
             },
             "shear_values": {
-                "headers": ["Span", "Local x", "Global x", "Shear V"],
+                "headers": ["Span", "Local l", "Global l", "Shear V"],
                 "rows": analysis["shear_value_rows"],
             },
             "moment_values": {
