@@ -113,8 +113,9 @@ class Span:
             rows.append([self.name, "No load", self.right_end, "\\(0\\)", "\\(0\\)", money(0.0)])
 
         left_total, right_total = self.fixed_end_moments()
-        rows.append([self.name, "Total", self.left_end, "\\(\\Sigma M_L\\)", "sum of left-end contributions", money(left_total)])
-        rows.append([self.name, "Total", self.right_end, "\\(\\Sigma M_R\\)", "sum of right-end contributions", money(right_total)])
+        if len(rows) > 2:
+            rows.append([self.name, "Total", self.left_end, "\\(\\Sigma M_L\\)", "sum of left-end contributions", money(left_total)])
+            rows.append([self.name, "Total", self.right_end, "\\(\\Sigma M_R\\)", "sum of right-end contributions", money(right_total)])
         return rows
 
 
@@ -1103,7 +1104,8 @@ APP_HTML = r"""<!doctype html>
             <div style="font-size: 13px; color: var(--text); margin-top: 10px; line-height: 1.5; background: #fff8e6; padding: 12px; border: 1px solid #ffd54f; border-radius: 6px;">
               <strong style="color: #b78103;">💡 Design Note:</strong><br>
               &bull; Use <strong>Maximum absolute shear</strong> for the shear design of the beam itself (sizing vertical stirrups/links).<br>
-              &bull; Use <strong>Maximum support reaction</strong> for designing the supporting elements (sizing columns, walls, or checking bearing pressure).
+              &bull; Use <strong>Maximum support reaction</strong> for designing the supporting elements (sizing columns, walls, or checking bearing pressure).<br>
+              &bull; <strong>"x from left support"</strong> is simply the distance (in meters) measured starting from the left end of that specific span.
             </div>
           </div>
           <div>
