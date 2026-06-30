@@ -884,7 +884,7 @@ APP_HTML = r"""<!doctype html>
           </div>
           <div>
             <label>&nbsp;</label>
-            <label><input id="exteriorFixed" type="checkbox" checked> Exterior supports fixed</label>
+            <label><input id="exteriorFixed" type="checkbox"> Exterior supports fixed</label>
             <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Leave unchecked if exterior supports are pins/rollers (not strictly fixed).</div>
           </div>
         </div>
@@ -1037,25 +1037,30 @@ APP_HTML = r"""<!doctype html>
         outputEl.innerHTML = `
           <div class="stack">
             <div>
-              <h2 class="subheading">Equilibrium Checks</h2>
-              <p class="formula">A zero residual means the check is balanced. Nonzero residuals are shown in red.</p>
-              ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
+              <h2 class="subheading">Beam, Loads, and Support Reactions</h2>
+              <p class="formula">The reaction forces shown below are the same forces used to close the SFD jumps at the supports.</p>
+              ${drawBeamSketch()}
             </div>
             <div>
-              <h2 class="subheading">Reaction Calculations</h2>
-              ${buildTable(currentResults.tables.reaction_calculations.headers, currentResults.tables.reaction_calculations.rows)}
+              <h2 class="subheading">Span Reaction Force Calculations</h2>
+              ${renderFbdCalculations()}
+            </div>
+            <div>
+              <h2 class="subheading">Support Reaction Summation</h2>
+              ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
             </div>
             <div>
               <h2 class="subheading">Span-End Reactions</h2>
               ${buildTable(currentResults.tables.reactions.headers, currentResults.tables.reactions.rows)}
             </div>
             <div>
-              <h2 class="subheading">Support Reaction Summation</h2>
-              ${buildTable(currentResults.tables.support_reaction_calculations.headers, currentResults.tables.support_reaction_calculations.rows)}
-            </div>
-            <div>
               <h2 class="subheading">Total Support Reactions</h2>
               ${buildTable(currentResults.tables.support_reactions.headers, currentResults.tables.support_reactions.rows)}
+            </div>
+            <div>
+              <h2 class="subheading">Equilibrium Checks</h2>
+              <p class="formula">A zero residual means the check is balanced. Nonzero residuals are shown in red.</p>
+              ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
             </div>
           </div>
         `;
@@ -1090,16 +1095,7 @@ APP_HTML = r"""<!doctype html>
         <div class="stack">
           <div>
             <h2 class="subheading">Beam, Loads, and Support Reactions</h2>
-            <p class="formula">The reaction forces shown below are the same forces used to close the SFD jumps at the supports.</p>
             ${drawBeamSketch()}
-          </div>
-          <div>
-            <h2 class="subheading">Span Reaction Force Calculations</h2>
-            ${renderFbdCalculations()}
-          </div>
-          <div>
-            <h2 class="subheading">Support Reaction Summation</h2>
-            ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
           </div>
           <div>
             <h2 class="subheading">Maximum Values</h2>
@@ -1385,7 +1381,7 @@ APP_HTML = r"""<!doctype html>
         if (loadMoment !== 0) {
              let loadFormulas = [];
              if (span.udl > 0) {
-                 loadFormulas.push(`(${span.udl} \\times ${span.length} \\times ${span.length / 2})`);
+                 loadFormulas.push(`(${span.udl} \\times ${span.length} \\times \\frac{${span.length}}{2})`);
              }
              if (span.point_loads && span.point_loads.length > 0) {
                  span.point_loads.forEach(p => {
