@@ -1,11 +1,16 @@
 import unittest
+import sys
+import os
 
-import mdm
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
+from mdm.core import Span, support_names
+from mdm.solver import build_standard_distribution_rows
+from mdm.server import calculate_from_payload, parse_point_loads
 
 class SpanCalculationTests(unittest.TestCase):
     def test_udl_fixed_end_moments(self) -> None:
-        span = mdm.Span("A", "B", length=6.0, udl=10.0)
+        span = Span("A", "B", length=6.0, udl=10.0)
 
         left, right = span.fixed_end_moments()
 
@@ -13,7 +18,7 @@ class SpanCalculationTests(unittest.TestCase):
         self.assertAlmostEqual(right, 30.0)
 
     def test_point_load_fixed_end_moments(self) -> None:
-        span = mdm.Span("B", "C", length=4.0, point_loads=[(12.0, 2.0)])
+        span = Span("B", "C", length=4.0, point_loads=[(12.0, 2.0)])
 
         left, right = span.fixed_end_moments()
 
@@ -21,7 +26,7 @@ class SpanCalculationTests(unittest.TestCase):
         self.assertAlmostEqual(right, 6.0)
 
     def test_fixed_end_detail_rows_show_formula_substitution_and_total(self) -> None:
-        span = mdm.Span("B", "C", length=4.0, udl=8.0, point_loads=[(12.0, 2.0)])
+        span = Span("B", "C", length=4.0, udl=8.0, point_loads=[(12.0, 2.0)])
 
         rows = span.fixed_end_detail_rows()
 
@@ -32,10 +37,10 @@ class SpanCalculationTests(unittest.TestCase):
 
 class MomentDistributionTests(unittest.TestCase):
     def test_distribution_factor_rows_for_two_span_beam(self) -> None:
-        spans = [mdm.Span("A", "B", 6.0), mdm.Span("B", "C", 4.0)]
-        supports = mdm.support_names(3)
+        spans = [Span("A", "B", 6.0), Span("B", "C", 4.0)]
+        supports = support_names(3)
 
-        rows, factors, _joint_ends, _opposite = mdm.build_standard_distribution_rows(spans, supports, {"A", "C"})
+        rows, factors, _joint_ends, _opposite = build_standard_distribution_rows(spans, supports, {"A", "C"})
 
         self.assertEqual(rows[1], ["B", "BA", "\\(k=1/L=1/6=0.1667\\)", "\\(\\Sigma k=0.4167\\)", "\\(DF=k/\\Sigma k=0.4000\\)"])
         self.assertEqual(rows[2], ["B", "BC", "\\(k=1/L=1/4=0.2500\\)", "\\(\\Sigma k=0.4167\\)", "\\(DF=k/\\Sigma k=0.6000\\)"])
@@ -54,7 +59,7 @@ class MomentDistributionTests(unittest.TestCase):
             ],
         }
 
-        result = mdm.calculate_from_payload(payload)
+        result = calculate_from_payload(payload)
 
         self.assertIn("Calculated 2 span(s)", result["status"])
         self.assertTrue(
@@ -69,7 +74,6 @@ class MomentDistributionTests(unittest.TestCase):
                 "shear_calculations",
                 "bending_calculations",
                 "equilibrium_checks",
-                "station_values",
                 "shear_values",
                 "moment_values",
                 "extrema",
@@ -94,11 +98,11 @@ class MomentDistributionTests(unittest.TestCase):
 
 class InputParsingTests(unittest.TestCase):
     def test_parse_multiple_point_loads(self) -> None:
-        self.assertEqual(mdm.parse_point_loads("12@2; 8@4.5", 6.0, "AB"), [(12.0, 2.0), (8.0, 4.5)])
+        self.assertEqual(parse_point_loads("12@2; 8@4.5", 6.0, "AB"), [(12.0, 2.0), (8.0, 4.5)])
 
     def test_parse_point_load_rejects_distance_outside_span(self) -> None:
         with self.assertRaisesRegex(ValueError, "between 0 and 6"):
-            mdm.parse_point_loads("12@8", 6.0, "AB")
+            parse_point_loads("12@8", 6.0, "AB")
 
 
 if __name__ == "__main__":

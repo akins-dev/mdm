@@ -1,133 +1,32 @@
-# Moment Distribution Method Calculator
+# Hardy Cross Moment Distribution
 
-This is a standalone Python browser-GUI program for continuous beam analysis
-using the Hardy Cross moment distribution method.
+A professional, modular Python web tool for structural beam analysis using the Hardy Cross moment distribution method.
 
-## Run
+## Features
+- **Interactive UI**: Clean, responsive browser-based interface.
+- **Accurate Analysis**: Solves continuous beams using the iterative moment distribution method.
+- **Detailed Outputs**: Generates Shear Force Diagrams (SFD), Bending Moment Diagrams (BMD), Fixed-End Moments (FEM), and support reactions.
+- **Points of Zero Shear**: Calculates and visualizes the points of maximum bending moment.
+- **No External Dependencies**: The core server runs purely on Python's standard library.
 
+## Installation
+Clone the repository:
 ```bash
-python3 mdm.py
+git clone <repository_url>
+cd mdm
 ```
 
-Then open the local address printed in the terminal, usually:
-
-```text
-http://127.0.0.1:8000
-```
-
-You can also choose a host or starting port:
-
+This tool does not require any third-party packages to run. If you wish to run the test suite, install the dependencies in `requirements.txt`:
 ```bash
-python3 mdm.py --host 127.0.0.1 --port 8000
+pip install -r requirements.txt
 ```
 
-If the selected port is busy, the app tries the next ports automatically.
-
-When installed as a package, the same app can be started with:
-
+## Usage
+Run the built-in HTTP server:
 ```bash
-mdm-gui
+python -m src.mdm.main
 ```
+Then, open the provided URL (default: `http://127.0.0.1:8000`) in your web browser.
 
-## Test
-
-```bash
-python3 -m unittest discover
-```
-
-## Project Structure
-
-```text
-.
-├── mdm.py              # calculation engine, browser UI, and local server
-├── tests/              # unit tests for formulas, parsing, and output payloads
-├── pyproject.toml      # package metadata and console script
-├── README.md
-└── .gitignore
-```
-
-## Inputs
-
-- number of supports
-- span lengths
-- uniformly distributed load on each span, if any
-- point loads on each span, if any
-- convergence tolerance
-- maximum number of distribution cycles
-
-The program automatically names supports `A`, `B`, `C`, and so on. Spans are
-named from their end supports, such as `AB` and `BC`.
-
-Point loads are entered in the GUI as `P@a`, where `a` is the distance from the
-left support. Separate multiple point loads with semicolons, for example:
-
-```text
-12@2; 8@4.5
-```
-
-## Outputs
-
-- distribution factor table
-- fixed-end moment formula and substitution table
-- moment distribution table
-- reaction calculations and support reactions
-- shear force diagram
-- bending moment diagram
-- maximum absolute shear force
-- maximum absolute bending moment
-- final support moment summary
-
-## Assumptions
-
-- Clockwise member-end moments are positive.
-- Relative stiffness is `1/L`, as requested.
-- Fixed-ended member carry-over factor is `1/2`.
-- Exterior supports default to fixed against rotation, so their distribution
-  factor is zero. Internal continuous joints are balanced by moment distribution.
-- Uniform loads are assumed to act over the full span.
-- Loads should be entered consistently. For example, `kN` and `m` produce
-  moments in `kN-m`.
-
-## Fixed-End Moment Formulas
-
-For a full-span UDL:
-
-```text
-left end  = -wL^2 / 12
-right end =  wL^2 / 12
-```
-
-For a point load `P` at distance `a` from the left support, with `b = L - a`:
-
-```text
-left end  = -Pab^2 / L^2
-right end =  Pa^2b / L^2
-```
-
-## Reaction, Shear, and Bending Calculations
-
-For each span, the app uses the final end moments from the moment distribution
-table and vertical equilibrium:
-
-```text
-R_right = (sum(Wx) + M_left + M_right) / L
-R_left  = sum(W) - R_right
-```
-
-The shear force at a section is:
-
-```text
-V(x) = R_left - wx - sum(P at or before x)
-```
-
-The bending moment is calculated from the area under the shear force diagram:
-
-```text
-M(x) = M_left + integral of V(x)
-```
-
-For the supported loads in this program:
-
-```text
-M(x) = M_left + R_left*x - wx^2/2 - sum(P(x-a))
-```
+See `USER_MANUAL.md` for detailed instructions on using the web interface.
+See `DEVELOPMENT.md` for information on the project's architecture and how to contribute.
