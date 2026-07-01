@@ -112,24 +112,24 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
                 "rows": distribution_rows,
             },
             "fem": {
-                "headers": ["Span", "Load", "End", "Formula", "Substitution", "Moment"],
+                "headers": ["Span", "Load", "End", "Formula", "Substitution", "Moment (kNm)"],
                 "rows": [row for span in spans for row in span.fixed_end_detail_rows()],
             },
             "moment": {"headers": md_headers, "rows": md_rows},
             "reactions": {
-                "headers": ["Support", "Span", "Component", "Reaction"],
+                "headers": ["Support", "Span", "Component", "Reaction (kN)"],
                 "rows": analysis["reaction_rows"],
             },
             "support_reactions": {
-                "headers": ["Support", "Total vertical reaction"],
+                "headers": ["Support", "Total vertical reaction (kN)"],
                 "rows": analysis["support_rows"],
             },
             "support_reaction_calculations": {
-                "headers": ["Support", "Span-end reaction parts", "Summation", "Total reaction"],
+                "headers": ["Support", "Span-end reaction parts (kN)", "Summation", "Total reaction (kN)"],
                 "rows": analysis["support_reaction_calc_rows"],
             },
             "reaction_calculations": {
-                "headers": ["Span", "Calculation", "Formula", "Substitution", "Value"],
+                "headers": ["Span", "Calculation", "Formula", "Substitution", "Value (kN)"],
                 "rows": analysis["reaction_calc_rows"],
             },
             "shear_calculations": {
@@ -149,19 +149,19 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
                 "rows": analysis["extrema_rows"],
             },
             "shear_values": {
-                "headers": ["Span", "Local l", "Global l", "Shear V"],
+                "headers": ["Span", "Local l (m)", "Global l (m)", "Shear V (kN)"],
                 "rows": analysis["shear_value_rows"],
             },
             "moment_values": {
-                "headers": ["Span", "Local x", "Global x", "Bending moment M"],
+                "headers": ["Span", "Local x (m)", "Global x (m)", "Bending moment M (kNm)"],
                 "rows": analysis["moment_value_rows"],
             },
             "extrema_summary": {
-                "headers": ["Result", "Span", "x from left support", "Value"],
+                "headers": ["Result", "Span", "x from left support (m)", "Value"],
                 "rows": analysis["summary_rows"],
             },
             "support": {
-                "headers": ["Support", "Member-end moments", "Algebraic joint sum"],
+                "headers": ["Support", "Member-end moments (kNm)", "Algebraic joint sum (kNm)"],
                 "rows": support_moment_rows(supports, joint_ends, final_moments),
             },
         },

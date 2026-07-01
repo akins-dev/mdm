@@ -570,15 +570,15 @@
         const x2 = xScale(span.end);
         const mid = (x1 + x2) / 2;
         const udl = Number(span.udl);
-        const udlMarkup = udl > 0 ? drawUdl(x1, x2, beamY - 72, beamY - 18, `${udl.toFixed(2)} / length`) : '';
+        const udlMarkup = udl > 0 ? drawUdl(x1, x2, beamY - 72, beamY - 18, `${udl.toFixed(2)} kN/m`) : '';
         const points = (span.point_loads || []).map(point => {
           const x = xScale(span.start + Number(point.distance));
-          return drawArrow(x, beamY - 78, x, beamY - 16, '#b42318', `${Number(point.load).toFixed(2)}`);
+          return drawArrow(x, beamY - 78, x, beamY - 16, '#b42318', `${Number(point.load).toFixed(2)} kN`);
         }).join('');
         return `
           <line x1="${x1}" y1="${beamY}" x2="${x2}" y2="${beamY}" stroke="#1b2430" stroke-width="4"></line>
           <text x="${mid - 18}" y="${beamY + 34}">${escapeHtml(span.name)}</text>
-          <text x="${mid - 28}" y="${beamY + 52}">L=${Number(span.length).toFixed(2)}</text>
+          <text x="${mid - 28}" y="${beamY + 52}">L=${Number(span.length).toFixed(2)} m</text>
           ${udlMarkup}
           ${points}
         `;
@@ -588,8 +588,8 @@
         const x = xScale(support.x);
         const reaction = Number(beam.support_reactions[support.name] || 0);
         const reactionArrow = reaction >= 0
-          ? drawArrow(x, beamY + 72, x, beamY + 18, '#1264a3', `${reaction.toFixed(2)}`)
-          : drawArrow(x, beamY + 18, x, beamY + 72, '#1264a3', `${reaction.toFixed(2)}`);
+          ? drawArrow(x, beamY + 72, x, beamY + 18, '#1264a3', `${reaction.toFixed(2)} kN`)
+          : drawArrow(x, beamY + 18, x, beamY + 72, '#1264a3', `${reaction.toFixed(2)} kN`);
         return `
           <polygon points="${x - 12},${beamY + 24} ${x + 12},${beamY + 24} ${x},${beamY + 2}" fill="#e8edf2" stroke="#344054"></polygon>
           <text x="${x - 5}" y="${beamY + 92}">${escapeHtml(support.name)}</text>
@@ -662,7 +662,8 @@
           const isZero = Math.abs(point.y) < 1e-4;
           const yOffset = isZero ? 14 : (index % 2 === 0 ? -8 : 16);
           const y = yScale(point.y) + yOffset;
-          return `<text x="${x}" y="${y}">${Number(point.y).toFixed(2)}</text>`;
+          const unit = label.includes('BMD') ? ' kNm' : ' kN';
+          return `<text x="${x}" y="${y}">${Number(point.y).toFixed(2)}${unit}</text>`;
         })
         .join('');
       return `
@@ -706,7 +707,7 @@
         const mlNum = Number(span.ml);
         const mrNum = Number(span.mr);
         
-        const w = 400, h = 180;
+        const w = 400, h = 210;
         const pad = 60;
         const beamY = 100;
         
@@ -730,7 +731,7 @@
             <path d="${path}" fill="none" stroke="${color}" stroke-width="3" />
             ${arrowHead}
             <rect x="${x - 30}" y="${beamY - 45}" width="60" height="20" fill="#ffeb3b" opacity="0.4"/>
-            <text x="${x}" y="${beamY - 32}" text-anchor="middle" font-weight="bold" font-size="12">${Math.abs(value).toFixed(3)}</text>
+            <text x="${x}" y="${beamY - 32}" text-anchor="middle" font-weight="bold" font-size="12">${Math.abs(value).toFixed(3)} kNm</text>
           `;
         };
 
@@ -746,14 +747,14 @@
             pointLoadsHtml = span.point_loads.map(p => {
                const px = pad + (p.distance / span.length) * (w - 2 * pad);
                return `<line x1="${px}" y1="${beamY - 40}" x2="${px}" y2="${beamY - 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-red)"/>
-                       <text x="${px}" y="${beamY - 45}" text-anchor="middle">${p.load}</text>`;
+                       <text x="${px}" y="${beamY - 45}" text-anchor="middle">${p.load} kN</text>`;
             }).join('');
         }
         
         let udlHtml = '';
         if (span.udl > 0) {
             udlHtml = `<rect x="${pad}" y="${beamY - 12}" width="${w - 2 * pad}" height="12" fill="#4caf50" opacity="0.5"/>
-                       <text x="${w/2}" y="${beamY - 18}" text-anchor="middle" font-size="12" fill="#1b5e20">${span.udl}</text>`;
+                       <text x="${w/2}" y="${beamY - 18}" text-anchor="middle" font-size="12" fill="#1b5e20">${span.udl} kN/m</text>`;
         }
 
         const fbdSvg = `
@@ -766,17 +767,17 @@
             ${udlHtml}
             ${pointLoadsHtml}
             <line x1="${pad}" y1="${beamY + 30}" x2="${pad}" y2="${beamY + 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-blue)"/>
-            <text x="${pad}" y="${beamY + 50}" text-anchor="middle" font-size="13">R_${leftSup}</text>
+            <text x="${pad}" y="${beamY + 50}" text-anchor="middle" font-size="13">R<tspan baseline-shift="sub" font-size="0.75em">${leftSup}</tspan></text>
             <line x1="${w - pad}" y1="${beamY + 30}" x2="${w - pad}" y2="${beamY + 5}" stroke="#222" stroke-width="2" marker-end="url(#arrow-blue)"/>
-            <text x="${w - pad}" y="${beamY + 50}" text-anchor="middle" font-size="13">R_${rightSup}</text>
+            <text x="${w - pad}" y="${beamY + 50}" text-anchor="middle" font-size="13">R<tspan baseline-shift="sub" font-size="0.75em">${rightSup}</tspan></text>
             <line x1="${pad}" y1="${beamY + 70}" x2="${w - pad}" y2="${beamY + 70}" stroke="#777" stroke-width="1" />
-            <text x="${w/2}" y="${beamY + 84}" text-anchor="middle" font-size="12">${span.length}</text>
+            <text x="${w/2}" y="${beamY + 84}" text-anchor="middle" font-size="12">${span.length} m</text>
           </svg>
         `;
 
         const momentEq = `\\( \\Sigma M_{@${leftSup}} = 0 \\quad \\circlearrowright + \\)`;
         
-        let momentExpression = `${mlStr} \\text{ (M_L)} `;
+        let momentExpression = `${mlStr} \\text{ (}M_L\\text{)} `;
         if (loadMoment !== 0) {
              let loadFormulas = [];
              if (span.udl > 0) {
@@ -789,10 +790,10 @@
              }
              momentExpression += `+ [${loadFormulas.join(' + ')}] \\text{ (Loads)} `;
         }
-        momentExpression += `+ ${mrStr} \\text{ (M_R)} - R_${rightSup} \\times ${span.length} = 0`;
+        momentExpression += `+ ${mrStr} \\text{ (}M_R\\text{)} - R_{${rightSup}} \\times ${span.length} = 0`;
 
         const forceEq = `\\( \\Sigma F_y = 0 \\quad \\uparrow + \\)`;
-        const forceExpression = `R_${leftSup} - ${totalLoad.toFixed(3)} \\text{ (Loads)} + ${rr.toFixed(3)} \\text{ (R_${rightSup})} = 0`;
+        const forceExpression = `R_{${leftSup}} - ${totalLoad.toFixed(3)} \\text{ (Loads)} + ${rr.toFixed(3)} \\text{ (}R_{${rightSup}}\\text{)} = 0`;
 
         return `
         <div style="margin-bottom: 24px; padding: 16px; background: #fafafa; border: 1px solid var(--line); border-radius: 8px;">
@@ -821,7 +822,7 @@
       for (const row of rows) {
         html += `<div style="padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 6px;">
           <strong style="display: inline-block; width: 80px; font-size: 14px;">Support ${escapeHtml(row[0])}</strong> 
-          <span style="color: var(--muted);">${escapeHtml(row[2])} = </span> <strong>${escapeHtml(row[3])}</strong>
+          <span style="color: var(--muted);">${escapeHtml(row[2])} = </span> <strong>${escapeHtml(row[3])} kN</strong>
           <div style="font-size: 13px; color: var(--muted); margin-top: 6px;">Contributions: ${escapeHtml(row[1])}</div>
         </div>`;
       }
