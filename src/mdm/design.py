@@ -273,24 +273,26 @@ def design_section(
             spacing_str += f"<p class='text-danger'>Warning: {money(actual_spacing)} mm &lt; minimum {money(min_spacing)} mm.</p>"
             spacing_out = "EXCEEDS LIMIT"
             spacing_status = "danger"
-            
-        html_lines.append(row(bs8110.REF_SPACING, spacing_str, spacing_out, spacing_status))
+        html_lines.append(row(bs8110.REF_MAX_SPACING, spacing_str, spacing_out, spacing_status))
         
     # Shear Design
     fyv_eff = min(fyv, 460.0)
     v = V_abs * 1000 / (b * d)
     shear_str = f"<p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {money(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
     
-    v_max = min(0.8 * math.sqrt(fcu), 5.0)
+    v_max_calc = 0.8 * math.sqrt(fcu)
+    v_max = min(v_max_calc, 5.0)
+    shear_str += f"<p>\\( v_{{max}} = \\min(0.8\\sqrt{{f_{{cu}}}}, 5) = \\min(0.8\\sqrt{{{fmt(fcu)}}}, 5) = {money(v_max)} \\text{{ N/mm}}^2 \\)</p>"
+    
     if v > v_max:
-        shear_str += f"<p class='text-danger'><b>WARNING:</b> \\( v > {money(v_max)} \\text{{ N/mm}}^2 \\). Section Inadequate.</p>"
+        shear_str += f"<p class='text-danger'><b>WARNING:</b> \\( v = {money(v)} > v_{{max}} = {money(v_max)} \\text{{ N/mm}}^2 \\). Section Inadequate.<br/><b>Advise:</b> Increase beam width (b), beam height (h), or both.</p>"
         shear_out = "SECTION INADEQUATE"
         shear_status = "danger"
     else:
         shear_out = "Section OK"
         shear_status = "success"
         
-    html_lines.append(row(bs8110.REF_SHEAR_CHECK, shear_str, shear_out, shear_status))
+    html_lines.append(row(bs8110.REF_MAX_SHEAR, shear_str, shear_out, shear_status))
         
     percent_As = (100 * area_prov) / (b * d)
     percent_As_eff = min(max(percent_As, 0.15), 3.0)
@@ -356,7 +358,7 @@ def design_section(
             defl_out = "Deflection OK"
             defl_status = "success"
         else:
-            defl_str += f"<p class='text-danger'>Warning: {money(actual_span_d)} &gt; {money(allowable_span_d)}</p>"
+            defl_str += f"<p class='text-danger'><b>WARNING:</b> Actual ratio ({money(actual_span_d)}) &gt; Allowable ({money(allowable_span_d)}).<br/><b>Advise:</b> Increase beam height (h).</p>"
             defl_out = "EXCEEDS LIMIT"
             defl_status = "danger"
             
