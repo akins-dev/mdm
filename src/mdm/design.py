@@ -262,34 +262,42 @@ def design_section(
     # Spacing Check
     outer_count = layer_counts[0] if layer_counts else 1
     if outer_count > 1:
-        actual_spacing = (b - 2 * cover - 2 * link_dia - outer_count * dia) / (outer_count - 1)
         min_spacing = max(dia, 25.0)
+        b_req = 2 * cover + 2 * link_dia + outer_count * dia + (outer_count - 1) * min_spacing
         
-        spacing_str = f"<p>Clear spacing = \\( \\frac{{{fmt(b)} - 2({fmt(cover)}) - 2({fmt(link_dia)}) - {outer_count}({fmt(dia)})}}{{{outer_count - 1}}} = {money(actual_spacing)} \\text{{ mm}} \\)</p>"
-        if actual_spacing >= min_spacing:
-            spacing_out = "Spacing OK"
+        min_spacing_calc_str = f"spacing = bar diameter (\\( \\phi \\)) or \\( h_{{agg}} + 5 \\), whichever is greater.<br/>"
+        min_spacing_calc_str += f"spacing = {fmt(dia)} or {20 + 5} = {fmt(min_spacing)} mm<br/>"
+        
+        spacing_str = f"<p>{min_spacing_calc_str}"
+        spacing_str += f"\\( b_{{req}} = 2c + 2\\phi_v + n\\phi + (n-1) \\times \\text{{spacing}} \\)<br/>"
+        spacing_str += f"\\( b_{{req}} = 2({fmt(cover)}) + 2({fmt(link_dia)}) + {outer_count}({fmt(dia)}) + {outer_count - 1}({fmt(min_spacing)}) = {fmt(b_req)} \\text{{ mm}} \\)</p>"
+        
+        if b_req <= b:
+            spacing_out = f"Spacing OK<br/>\\( (b_{{req}} \\le b) \\)"
             spacing_status = "success"
         else:
-            spacing_str += f"<p class='text-danger'>Warning: {money(actual_spacing)} mm &lt; minimum {money(min_spacing)} mm.</p>"
+            spacing_str += f"<p class='text-danger'><b>WARNING:</b> Required width ({money(b_req)} mm) &gt; Beam width ({fmt(b)} mm).</p>"
             spacing_out = "EXCEEDS LIMIT"
             spacing_status = "danger"
+            
         html_lines.append(row(bs8110.REF_MAX_SPACING, spacing_str, spacing_out, spacing_status))
         
     # Shear Design
     fyv_eff = min(fyv, 460.0)
     v = V_abs * 1000 / (b * d)
-    shear_str = f"<p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {money(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
+    shear_str = f"<p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
     
     v_max_calc = 0.8 * math.sqrt(fcu)
     v_max = min(v_max_calc, 5.0)
-    shear_str += f"<p>\\( v_{{max}} = \\min(0.8\\sqrt{{f_{{cu}}}}, 5) = \\min(0.8\\sqrt{{{fmt(fcu)}}}, 5) = {money(v_max)} \\text{{ N/mm}}^2 \\)</p>"
+    shear_str += f"<p>\\( v_{{max}} = 0.8\\sqrt{{f_{{cu}}}} \\) or 5, whichever is lesser.<br/>"
+    shear_str += f"\\( v_{{max}} = 0.8\\sqrt{{{fmt(fcu)}}} \\) or 5 = \\( {money(v_max)} \\text{{ N/mm}}^2 \\)</p>"
     
     if v > v_max:
         shear_str += f"<p class='text-danger'><b>WARNING:</b> \\( v = {money(v)} > v_{{max}} = {money(v_max)} \\text{{ N/mm}}^2 \\). Section Inadequate.<br/><b>Advise:</b> Increase beam width (b), beam height (h), or both.</p>"
         shear_out = "SECTION INADEQUATE"
         shear_status = "danger"
     else:
-        shear_out = "Section OK"
+        shear_out = f"Section OK<br/>\\( (v \\le v_{{max}}) \\)"
         shear_status = "success"
         
     html_lines.append(row(bs8110.REF_MAX_SHEAR, shear_str, shear_out, shear_status))
@@ -355,7 +363,7 @@ def design_section(
         defl_str += f"Actual = {money(actual_span_d)}</p>"
         
         if actual_span_d <= allowable_span_d:
-            defl_out = "Deflection OK"
+            defl_out = f"Deflection OK<br/>\\( (\\text{{Actual}} \\le \\text{{Allowable}}) \\)"
             defl_status = "success"
         else:
             defl_str += f"<p class='text-danger'><b>WARNING:</b> Actual ratio ({money(actual_span_d)}) &gt; Allowable ({money(allowable_span_d)}).<br/><b>Advise:</b> Increase beam height (h).</p>"
