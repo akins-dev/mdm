@@ -1,7 +1,7 @@
 import math
 from typing import Dict, List, Tuple, Any
 from .core import money, fmt, select_bar_arrangement, get_bar_area
-import mdm.bs8110 as bs8110
+from . import bs8110
 
 def row(ref: str, calc: str, out: str = "") -> str:
     return f"""
