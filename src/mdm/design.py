@@ -360,7 +360,7 @@ def design_section(
         
         sv = min(sv_req, sv_max)
         sv = math.floor(sv / 25.0) * 25.0
-        link_out = f"Provide Y{int(link_dia)} @ {int(sv)} c/c"
+        link_out = f"Provide 2-legs Y{int(link_dia)}mm bars @ {int(sv)}mm c/c"
         
     html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
     
