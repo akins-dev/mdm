@@ -156,18 +156,18 @@ def design_section(
         z_val = d * (0.5 + math.sqrt(abs(0.25 - K / 0.9)))
         z = min(z_val, 0.95 * d)
         
-        calc_str = f"<p><b>Singly Reinforced</b> \\( (M \\le M_u) \\)<br/>\\( K = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)</p>"
+        calc_str = f"<p><b>Singly Reinforced</b> \\( (M \\le M_u) \\)<br/>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)</p>"
         
         if z_val > 0.95 * d:
             calc_str += f"<p>\\( z \\) limited to \\( 0.95d = {money(0.95 * d)} \\text{{ mm}} \\).</p>"
             
         As_req = M_abs * 1e6 / (bs8110.PARTIAL_SAFETY_STEEL * fy_eff * z)
-        calc_str += f"<p>\\( A_s = \\frac{{{money(M_abs)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} f_y z}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times {money(z)}}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
+        calc_str += f"<p>\\( A_s = \\frac{{M}}{{{bs8110.PARTIAL_SAFETY_STEEL} f_y z}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times {money(z)}}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
         
         html_lines.append(row(
             bs8110.REF_ULTIMATE_MOMENT,
             calc_str,
-            f"\\( z = {money(z)} \\text{{ mm}} \\)<br/>\\( A_s = {money(As_req)} \\text{{ mm}}^2 \\)"
+            f"Compression reinforcement not required<br/>\\( z = {money(z)} \\text{{ mm}} \\)<br/>\\( A_s = {money(As_req)} \\text{{ mm}}^2 \\)"
         ))
         
     else:
@@ -257,7 +257,7 @@ def design_section(
             bar_str += f"<p>Provide Compression Steel \\( A'_{{sc}} \\ge {money(Asc_req)} \\text{{ mm}}^2 \\).</p>"
             bar_out += f"<br/><br/>Multiple layers ({compression_loc})"
             
-    html_lines.append(row(bs8110.REF_BAR_SELECTION, bar_str, bar_out))
+    html_lines.append(row("", bar_str, bar_out))
             
     # Spacing Check
     outer_count = layer_counts[0] if layer_counts else 1
@@ -364,7 +364,8 @@ def design_section(
             
         html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out, defl_status))
 
-    html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex justify-center'>")
+    html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex flex-col items-center'>")
+    html_lines.append("<h5 class='text-md font-bold mb-2'>Beam section detailing</h5>")
     html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support))
     html_lines.append("</div>")
 

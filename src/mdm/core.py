@@ -151,7 +151,7 @@ def select_bar_arrangement(required_area: float, b: float, cover: float, link_di
     if is_compression:
         dias_to_try = [12, 16, 20]
     else:
-        dias_to_try = [20, 25, 16, 32]
+        dias_to_try = [20, 25, 16]
         
     if target_dia and target_dia in STANDARD_BAR_AREAS:
         if target_dia in dias_to_try:
