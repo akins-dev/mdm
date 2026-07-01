@@ -315,28 +315,54 @@ def design_section(
     
     html_lines.append(row(bs8110.REF_SHEAR_CAPACITY, vc_str, f"\\( v_c = {money(vc)} \\text{{ N/mm}}^2 \\)"))
     
-    asv = 2 * get_bar_area(link_dia)
+    asv_single = get_bar_area(link_dia)
+    asv = 2 * asv_single
+    
+    asv_str = f"\\( A_{{sv}} \\) (2-legged stirrup) = \\( 2 \\times \\text{{Area of }}\\phi_v \\)<br/>"
+    asv_str += f"\\( A_{{sv}} = 2 \\times {fmt(asv_single)} = {fmt(asv)} \\text{{ mm}}^2 \\)<br/>"
+    
     link_str = ""
+    link_out = ""
+    
     if v < 0.5 * vc:
-        link_str = f"<p>\\( v < 0.5 v_c \\) ({money(0.5*vc)}). Nominal links.<br/>"
-        sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (0.4 * b)
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4 b}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {money(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"<p><b>Condition:</b> \\( v < 0.5v_c \\)<br/>"
+        link_str += f"\\( {money(v)} < 0.5({money(vc)}) \\)<br/>"
+        link_str += f"\\( {money(v)} < {money(0.5*vc)} \\)</p>"
+        link_str += f"<p>Shear reinforcement is not required.</p>"
+        link_out = "None Required"
     elif v <= vc + 0.4:
-        link_str = f"<p>\\( v \\le v_c + 0.4 \\) ({money(vc+0.4)}). Nominal links.<br/>"
+        link_str += f"<p><b>Condition:</b> \\( 0.5v_c < v \\le (v_c + 0.4) \\)<br/>"
+        link_str += f"\\( {money(0.5*vc)} < {money(v)} \\le ({money(vc)} + 0.4) \\)<br/>"
+        link_str += f"\\( {money(0.5*vc)} < {money(v)} \\le {money(vc+0.4)} \\)</p>"
+        link_str += f"<p>Minimum links for whole length of beam.<br/>"
+        link_str += asv_str
+        link_str += f"\\( A_{{sv}} \\ge \\frac{{0.4b S_v}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
         sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (0.4 * b)
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4 b}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {money(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4b}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
     else:
-        link_str = f"<p>\\( v > v_c + 0.4 \\). Design links.<br/>"
+        link_str += f"<p><b>Condition:</b> \\( (v_c + 0.4) < v \\)<br/>"
+        link_str += f"\\( {money(vc+0.4)} < {money(v)} \\)</p>"
+        link_str += f"<p>Design links required.<br/>"
+        link_str += asv_str
+        link_str += f"\\( A_{{sv}} \\ge \\frac{{b S_v (v - v_c)}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
         sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (b * (v - vc))
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{b (v - v_c)}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {money(asv)} \\times {fmt(fyv_eff)}}}{{{fmt(b)} ({money(v)} - {money(vc)})}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{b(v - v_c)}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{{fmt(b)}({money(v)} - {money(vc)})}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
         
-    sv_max = min(0.75 * d, 300)
-    link_str += f"<p>\\( S_{{v,max}} = {money(sv_max)} \\text{{ mm}} \\).</p>"
-    
-    sv = min(sv_req, sv_max)
-    sv = math.floor(sv / 25.0) * 25.0
-    
-    html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, f"Provide Y{int(link_dia)} @ {int(sv)} c/c"))
+    if v >= 0.5 * vc:
+        if Asc_req > 0:
+            sv_max = min(0.75 * d, 300, 12 * dia_c)
+            link_str += f"<p>\\( S_{{v,max}} = 0.75d \\text{{, }} 300 \\text{{, or }} 12\\phi_c \\text{{ (whichever is lesser)}} \\)<br/>"
+            link_str += f"\\( S_{{v,max}} = 0.75({fmt(d)}) \\text{{, }} 300 \\text{{, or }} 12({fmt(dia_c)}) = {fmt(sv_max)} \\text{{ mm}} \\)</p>"
+        else:
+            sv_max = min(0.75 * d, 300)
+            link_str += f"<p>\\( S_{{v,max}} = 0.75d \\text{{ or }} 300 \\text{{ (whichever is lesser)}} \\)<br/>"
+            link_str += f"\\( S_{{v,max}} = 0.75({fmt(d)}) \\text{{ or }} 300 = {fmt(sv_max)} \\text{{ mm}} \\)</p>"
+        
+        sv = min(sv_req, sv_max)
+        sv = math.floor(sv / 25.0) * 25.0
+        link_out = f"Provide Y{int(link_dia)} @ {int(sv)} c/c"
+        
+    html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
     
     # Deflection Check
     if not is_support and span_length > 0:
