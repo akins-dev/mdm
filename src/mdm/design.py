@@ -3,12 +3,13 @@ from typing import Dict, List, Tuple, Any
 from .core import money, fmt, select_bar_arrangement, get_bar_area
 from . import bs8110
 
-def row(ref: str, calc: str, out: str = "") -> str:
+def row(ref: str, calc: str, out: str = "", status: str = "success") -> str:
+    out_html = f"<span class='text-{status}'>{out}</span>" if out else ""
     return f"""
     <div class="calc-row">
       <div class="calc-ref">{ref}</div>
       <div class="calc-body">{calc}</div>
-      <div class="calc-out">{out}</div>
+      <div class="calc-out">{out_html}</div>
     </div>
     """
 
@@ -222,7 +223,7 @@ def design_section(
     if Asc_req > As_max:
         max_steel_str += f"<p class='text-danger'><b>WARNING:</b> \\( A'_{{sc}} = {money(Asc_req)} > 4\\% \\) limit ({money(As_max)} mm&sup2;).</p>"
     if max_steel_str:
-        html_lines.append(row(bs8110.REF_MAX_STEEL, max_steel_str, "EXCEEDS LIMIT"))
+        html_lines.append(row(bs8110.REF_MAX_STEEL, max_steel_str, "EXCEEDS LIMIT", "danger"))
         
     # Select bar arrangement
     layer_counts, dia, area_prov = select_bar_arrangement(As_req, b, cover, link_dia, is_compression=False, target_dia=int(main_bar_dia))
@@ -267,11 +268,13 @@ def design_section(
         spacing_str = f"<p>Clear spacing = \\( \\frac{{{fmt(b)} - 2({fmt(cover)}) - 2({fmt(link_dia)}) - {outer_count}({fmt(dia)})}}{{{outer_count - 1}}} = {money(actual_spacing)} \\text{{ mm}} \\)</p>"
         if actual_spacing >= min_spacing:
             spacing_out = "Spacing OK"
+            spacing_status = "success"
         else:
             spacing_str += f"<p class='text-danger'>Warning: {money(actual_spacing)} mm &lt; minimum {money(min_spacing)} mm.</p>"
-            spacing_out = "Spacing FAIL"
+            spacing_out = "EXCEEDS LIMIT"
+            spacing_status = "danger"
             
-        html_lines.append(row("Spacing Check", spacing_str, spacing_out))
+        html_lines.append(row(bs8110.REF_SPACING, spacing_str, spacing_out, spacing_status))
         
     # Shear Design
     fyv_eff = min(fyv, 460.0)
@@ -280,9 +283,14 @@ def design_section(
     
     v_max = min(0.8 * math.sqrt(fcu), 5.0)
     if v > v_max:
-        shear_str += f"<p class='text-danger'><b>WARNING:</b> \\( v \\) exceeds max allowed \\( {money(v_max)} \\text{{ N/mm}}^2 \\).</p>"
+        shear_str += f"<p class='text-danger'><b>WARNING:</b> \\( v > {money(v_max)} \\text{{ N/mm}}^2 \\). Section Inadequate.</p>"
+        shear_out = "SECTION INADEQUATE"
+        shear_status = "danger"
+    else:
+        shear_out = "Section OK"
+        shear_status = "success"
         
-    html_lines.append(row(bs8110.REF_MAX_SHEAR, shear_str, f"\\( v = {money(v)} \\text{{ N/mm}}^2 \\)"))
+    html_lines.append(row(bs8110.REF_SHEAR_CHECK, shear_str, shear_out, shear_status))
         
     percent_As = (100 * area_prov) / (b * d)
     percent_As_eff = min(max(percent_As, 0.15), 3.0)
@@ -346,11 +354,13 @@ def design_section(
         
         if actual_span_d <= allowable_span_d:
             defl_out = "Deflection OK"
+            defl_status = "success"
         else:
             defl_str += f"<p class='text-danger'>Warning: {money(actual_span_d)} &gt; {money(allowable_span_d)}</p>"
-            defl_out = "Deflection FAIL"
+            defl_out = "EXCEEDS LIMIT"
+            defl_status = "danger"
             
-        html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out))
+        html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out, defl_status))
 
     html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex justify-center'>")
     html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support))
