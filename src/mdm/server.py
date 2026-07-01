@@ -12,6 +12,7 @@ from .solver import (
     analysis_from_final_moments,
     support_moment_rows
 )
+from .design import design_section
 
 
 def get_html_template() -> str:
@@ -181,17 +182,130 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
         self.wfile.write(get_html_template().encode("utf-8"))
 
     def do_POST(self) -> None:
-        if self.path != "/calculate":
-            self.send_error(404)
+        if self.path == "/calculate":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                result = calculate_from_payload(payload)
+                self.send_json(200, result)
+            except (json.JSONDecodeError, ValueError) as error:
+                self.send_json(400, {"error": str(error)})
+            return
+            
+        if self.path == "/design":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                
+                # Payload contains analysis_results and design_params
+                analysis = payload.get("analysis_results", {})
+                params = payload.get("design_params", {})
+                
+                fcu = float(params.get("fcu", 30))
+                fy = float(params.get("fy", 460))
+                fyv = float(params.get("fyv", 250))
+                b = float(params.get("b", 230))
+                h = float(params.get("h", 450))
+                cover = float(params.get("cover", 30))
+                main_bar_dia = float(params.get("main_bar_dia", 20))
+                link_dia = float(params.get("link_dia", 10))
+                support_cond = params.get("support_cond", "Continuous")
+                
+                reports = []
+                
+                # Group extrema rows by span and find max moment and max shear for each span
+                extrema_rows = analysis.get("tables", {}).get("extrema", {}).get("rows", [])
+                
+                spans = {}
+                for row in extrema_rows:
+                    span_name = row[0]
+                    # row: [span_name, l_val, shear, moment]
+                    # Since these are strings representing formatted numbers, we need to parse them
+                    # Actually, the analysis_from_final_moments function in solver.py returns money formatted strings
+                    # We can use the diagrams data or parse the strings, but wait, the analysis payload also includes "diagrams"
+                    # But it's easier to just re-fetch the max moment and shear from the raw data if we pass the raw data
+                    pass
+                
+                # To get raw floats, let's use the 'beam' data from analysis
+                beam_data = analysis.get("beam", {})
+                span_infos = beam_data.get("spans", [])
+                supports = beam_data.get("supports", [])
+                
+                for span_info in span_infos:
+                    span_name = span_info.get("name")
+                    # Find maximum sagging moment (positive moment) and max absolute shear in the span
+                    # We need to look at the moment_values and shear_values arrays for this span
+                    moment_values = analysis.get("tables", {}).get("moment_values", {}).get("rows", [])
+                    shear_values = analysis.get("tables", {}).get("shear_values", {}).get("rows", [])
+                    
+                    max_sagging_moment = 0.0
+                    for row in moment_values:
+                        if str(row[0]) == span_name:
+                            m_val = float(str(row[3]).replace(',', ''))
+                            if m_val > max_sagging_moment:
+                                max_sagging_moment = m_val
+                                
+                    max_abs_shear = 0.0
+                    for row in shear_values:
+                        if str(row[0]) == span_name:
+                            v_val = abs(float(str(row[3]).replace(',', '')))
+                            if v_val > max_abs_shear:
+                                max_abs_shear = v_val
+                                
+                    if max_sagging_moment > 0.0:
+                        span_length_mm = float(span_info.get("length", 0)) * 1000.0
+                        report = design_section(
+                            name=span_name,
+                            M=max_sagging_moment,
+                            V=max_abs_shear,
+                            is_support=False,
+                            fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
+                            main_bar_dia=main_bar_dia, link_dia=link_dia,
+                            span_length=span_length_mm, support_cond=support_cond
+                        )
+                        reports.append(report["html"])
+                        
+                # Now design for supports (hogging moments, negative)
+                for span_info in span_infos:
+                    span_name = span_info.get("name")
+                    # Check left support
+                    ml = float(span_info.get("ml", 0))
+                    if ml < -0.01:
+                        # Find max shear near left support
+                        max_abs_shear = abs(float(span_info.get("left_reaction", 0)))
+                        report = design_section(
+                            name=f"Support {span_info.get('left')}",
+                            M=ml,
+                            V=max_abs_shear,
+                            is_support=True,
+                            fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
+                            main_bar_dia=main_bar_dia, link_dia=link_dia
+                        )
+                        reports.append(report["html"])
+                        
+                    # For the last span, check right support
+                    if span_info == span_infos[-1]:
+                        mr = float(span_info.get("mr", 0))
+                        if mr < -0.01:
+                            max_abs_shear = abs(float(span_info.get("right_reaction", 0)))
+                            report = design_section(
+                                name=f"Support {span_info.get('right')}",
+                                M=mr,
+                                V=max_abs_shear,
+                                is_support=True,
+                                fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
+                                main_bar_dia=main_bar_dia, link_dia=link_dia
+                            )
+                            reports.append(report["html"])
+                            
+                self.send_json(200, {"reports": reports})
+            except Exception as error:
+                import traceback
+                traceback.print_exc()
+                self.send_json(400, {"error": str(error)})
             return
 
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            result = calculate_from_payload(payload)
-            self.send_json(200, result)
-        except (json.JSONDecodeError, ValueError) as error:
-            self.send_json(400, {"error": str(error)})
+        self.send_error(404)
 
     def log_message(self, format: str, *args: object) -> None:
         return

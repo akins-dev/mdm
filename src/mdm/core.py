@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
+import math
 
 @dataclass
 class Span:
@@ -119,3 +120,74 @@ def money(value: float) -> str:
 
 def fmt(value: float) -> str:
     return f"{value:g}"
+
+STANDARD_BAR_AREAS = {
+    6: [28.3, 56.6, 84.9, 113, 142, 170, 198, 226, 255, 283],
+    8: [50.3, 101, 151, 201, 252, 302, 352, 402, 453, 503],
+    10: [78.5, 157, 236, 314, 393, 471, 550, 628, 707, 785],
+    12: [113, 226, 339, 452, 566, 679, 792, 905, 1020, 1130],
+    16: [201, 402, 603, 804, 1010, 1210, 1410, 1610, 1810, 2010],
+    20: [314, 628, 943, 1260, 1570, 1890, 2200, 2510, 2830, 3140],
+    25: [491, 982, 1470, 1960, 2450, 2950, 3440, 3930, 4420, 4910],
+    32: [804, 1610, 2410, 3220, 4020, 4830, 5630, 6430, 7240, 8040],
+    40: [1260, 2510, 3770, 5030, 6280, 7540, 8800, 10100, 11300, 12600],
+    50: [1960, 3930, 5890, 7850, 9820, 11800, 13700, 15700, 17700, 19600]
+}
+
+def get_bar_area(diameter: int, count: int = 1) -> float:
+    if diameter in STANDARD_BAR_AREAS and 1 <= count <= 10:
+        return STANDARD_BAR_AREAS[diameter][count - 1]
+    return count * math.pi * (diameter ** 2) / 4.0
+
+def select_bar_arrangement(required_area: float, b: float, cover: float, link_dia: float, max_agg_size: float = 20.0, is_compression: bool = False, target_dia: int = None) -> Tuple[int, int, float]:
+    """
+    Find the optimal bar arrangement (count, diameter, area_provided) that provides at least the required area
+    and satisfies the spacing requirements in a single layer.
+    Returns (count, diameter, area_provided) or (0, 0, 0.0) if none found in one layer.
+    """
+    best_arrangement = None
+    min_area_surplus = float('inf')
+    
+    if is_compression:
+        dias_to_try = [12, 16, 20]
+    else:
+        dias_to_try = [20, 25, 16, 32]
+        
+    if target_dia and target_dia in STANDARD_BAR_AREAS:
+        if target_dia in dias_to_try:
+            dias_to_try.remove(target_dia)
+        dias_to_try.insert(0, target_dia)
+        
+    for dia in dias_to_try:
+        # Find minimum number of bars to satisfy area
+        count = 2 # Minimum 2 bars
+        area_provided = 0.0
+        while count <= 10:
+            area_provided = get_bar_area(dia, count)
+            if area_provided >= required_area:
+                break
+            count += 1
+        
+        if count > 10 or area_provided < required_area:
+            continue
+            
+        # Check spacing
+        # Minimum spacing between bars is the maximum of: max_agg_size + 5mm, bar diameter
+        min_spacing = max(max_agg_size + 5.0, float(dia))
+        
+        # Total width available for bars
+        available_width = b - 2 * cover - 2 * link_dia
+        
+        # Width required
+        required_width = (count * dia) + ((count - 1) * min_spacing)
+        
+        if required_width <= available_width:
+            surplus = area_provided - required_area
+            if surplus < min_area_surplus:
+                min_area_surplus = surplus
+                best_arrangement = (count, dia, area_provided)
+                
+    if best_arrangement:
+        return best_arrangement
+    return 0, 0, 0.0
+

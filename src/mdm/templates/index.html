@@ -235,6 +235,39 @@
     tr.check-pass td {
       background: #f0fdf4;
     }
+    .calc-sheet {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 10px;
+    }
+    .calc-row {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+      align-items: center;
+    }
+    .calc-ref {
+      width: 15%;
+      font-size: 12px;
+      color: #667085;
+      font-weight: 700;
+      border-right: 1px solid #eee;
+      padding-right: 10px;
+    }
+    .calc-body {
+      width: 65%;
+      padding: 0 15px;
+    }
+    .calc-out {
+      width: 20%;
+      text-align: right;
+      font-weight: 700;
+      color: #1264a3;
+      border-left: 1px solid #eee;
+      padding-left: 10px;
+    }
     @media (max-width: 860px) {
       main {
         grid-template-columns: 1fr;
@@ -275,8 +308,33 @@
         <p class="formula">Point loads use <strong>P@a</strong>, where <strong>a</strong> is the distance from the left support. Separate multiple point loads with semicolons.</p>
         <div id="spans"></div>
       </div>
+      <div class="section">
+        <details>
+            <summary style="font-weight: 700; cursor: pointer; margin-bottom: 10px;">RC Design Parameters</summary>
+            <div class="grid" style="margin-top: 10px;">
+              <div><label>fcu (N/mm²)</label><input id="paramFcu" type="number" value="30"></div>
+              <div><label>fy (N/mm²)</label><input id="paramFy" type="number" value="460"></div>
+              <div><label>fyv (N/mm²)</label><input id="paramFyv" type="number" value="250"></div>
+              <div><label>b (mm)</label><input id="paramB" type="number" value="230"></div>
+              <div><label>h (mm)</label><input id="paramH" type="number" value="450"></div>
+              <div><label>Cover (mm)</label><input id="paramCover" type="number" value="30"></div>
+              <div><label>Main Bar Ø (mm)</label><input id="paramMainBarDia" type="number" value="20"></div>
+              <div><label>Link Ø (mm)</label><input id="paramLinkDia" type="number" value="10"></div>
+              <div><label>Support Type</label>
+                <select id="paramSupportCond">
+                  <option value="Simply supported">Simply supported</option>
+                  <option value="Continuous" selected>Continuous</option>
+                  <option value="Cantilever">Cantilever</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top: 10px;">
+                <button class="primary" id="runDesign" style="width: 100%">Run RC Design</button>
+            </div>
+        </details>
+      </div>
       <div class="actions">
-        <button class="primary" id="calculate">Calculate</button>
+        <button class="primary" id="calculate">Calculate Analysis</button>
         <button class="secondary" id="clear">Clear Outputs</button>
         <div id="status" class="status">Enter span data, then calculate.</div>
       </div>
@@ -341,8 +399,10 @@
       moment: 'Moment Distribution',
       reactions: 'Reactions',
       diagrams: 'SFD / BMD',
-      support: 'Final Support Moments'
+      design: 'RC Design'
     };
+    
+    let currentDesignHtml = '';
 
     function supportName(index) {
       const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -452,6 +512,20 @@
       if (activeTab === 'diagrams') {
         outputEl.innerHTML = renderDiagrams();
         typesetMath();
+        return;
+      }
+      if (activeTab === 'design') {
+        if (!currentDesignHtml) {
+            outputEl.innerHTML = '<p class="formula">Click "Run RC Design" in the left panel to generate the design.</p>';
+        } else {
+            outputEl.innerHTML = `<div class="stack">
+                <div>
+                  <h2 class="subheading">Reinforced Concrete Design (BS 8110)</h2>
+                  ${currentDesignHtml}
+                </div>
+              </div>`;
+            typesetMath();
+        }
         return;
       }
       if (activeTab === 'reactions') {
@@ -880,8 +954,51 @@
     document.getElementById('calculate').addEventListener('click', () => {
       calculate().catch(error => setStatus(error.message, true));
     });
+    
+    document.getElementById('runDesign').addEventListener('click', async () => {
+        if (!currentResults) {
+            setStatus('Please run analysis first.', true);
+            return;
+        }
+        setStatus('Running design...', false);
+        try {
+            const payload = {
+                analysis_results: currentResults,
+                design_params: {
+                    fcu: document.getElementById('paramFcu').value,
+                    fy: document.getElementById('paramFy').value,
+                    fyv: document.getElementById('paramFyv').value,
+                    b: document.getElementById('paramB').value,
+                    h: document.getElementById('paramH').value,
+                    cover: document.getElementById('paramCover').value,
+                    main_bar_dia: document.getElementById('paramMainBarDia').value,
+                    link_dia: document.getElementById('paramLinkDia').value,
+                    support_cond: document.getElementById('paramSupportCond').value
+                }
+            };
+            const response = await fetch('/design', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                setStatus(data.error || 'Design failed.', true);
+                return;
+            }
+            currentDesignHtml = data.reports.join('');
+            activeTab = 'design';
+            renderTabs();
+            renderActiveTable();
+            setStatus('Design complete.', false);
+        } catch (error) {
+            setStatus(error.message, true);
+        }
+    });
+    
     document.getElementById('clear').addEventListener('click', () => {
       currentResults = null;
+      currentDesignHtml = '';
       renderActiveTable();
       setStatus('Outputs cleared.', false);
     });
