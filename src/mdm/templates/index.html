@@ -727,29 +727,55 @@
       const maxX = Math.max(...xs);
       const maxAbsY = Math.max(1, ...ys.map(value => Math.abs(value)));
       const xScale = x => pad.left + ((x - minX) / Math.max(1e-9, maxX - minX)) * (width - pad.left - pad.right);
-      const yScale = y => pad.top + ((maxAbsY - y) / (2 * maxAbsY)) * (height - pad.top - pad.bottom);
+      
+      const invertY = label.includes('BMD');
+      const yScale = y => {
+        const mappedY = invertY ? -y : y;
+        return pad.top + ((maxAbsY - mappedY) / (2 * maxAbsY)) * (height - pad.top - pad.bottom);
+      };
+      
       const zeroY = yScale(0);
       const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${xScale(point.x).toFixed(2)} ${yScale(point.y).toFixed(2)}`).join(' ');
       const supportMarks = supports.map(support => {
         const x = xScale(support.x);
         return `<line class="grid-line" x1="${x}" y1="${pad.top}" x2="${x}" y2="${height - pad.bottom}"></line><text x="${x - 4}" y="${height - 18}">${escapeHtml(support.name)}</text>`;
       }).join('');
+      
       const labelPoints = selectDiagramLabels(points, maxAbsY);
+      const renderedLabels = [];
       const labels = labelPoints
-        .map((point, index) => {
+        .map((point) => {
           let x = xScale(point.x) + 4;
+          const mappedY = invertY ? -point.y : point.y;
           const isZero = Math.abs(point.y) < 1e-4;
-          const yOffset = isZero ? 14 : (point.y > 0 ? -8 : 16);
-          let hasSameXPrev = index > 0 && Math.abs(labelPoints[index - 1].x - point.x) < 1e-6;
-          let hasSameXNext = index < labelPoints.length - 1 && Math.abs(labelPoints[index + 1].x - point.x) < 1e-6;
-          if (hasSameXPrev || hasSameXNext) {
-            x += 2;
+          let yOffset = isZero ? 14 : (mappedY > 0 ? -8 : 16);
+          let y = yScale(point.y) + yOffset;
+          
+          let hasSameXPrev = renderedLabels.length > 0 && Math.abs(renderedLabels[renderedLabels.length - 1].point.x - point.x) < 1e-6;
+          if (hasSameXPrev) x += 2;
+          
+          // Anti-overlap collision detection
+          let collision = true;
+          let iterations = 0;
+          while (collision && iterations < 5) {
+            collision = false;
+            for (let i = renderedLabels.length - 1; i >= Math.max(0, renderedLabels.length - 5); i--) {
+              const prev = renderedLabels[i];
+              if (Math.abs(x - prev.x) < 45 && Math.abs(y - prev.y) < 14) {
+                 collision = true;
+                 if (mappedY >= prev.mappedY) y = prev.y - 14;
+                 else y = prev.y + 14;
+              }
+            }
+            iterations++;
           }
-          const y = yScale(point.y) + yOffset;
-          const unit = label.includes('BMD') ? ' kNm' : ' kN';
+          
+          renderedLabels.push({ x, y, point, mappedY });
+          const unit = invertY ? ' kNm' : ' kN';
           return `<text x="${x}" y="${y}">${Number(point.y).toFixed(2)}${unit}</text>`;
         })
         .join('');
+        
       return `
         <svg class="diagram" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}">
           <line class="axis" x1="${pad.left}" y1="${zeroY}" x2="${width - pad.right}" y2="${zeroY}"></line>
@@ -757,7 +783,7 @@
           ${supportMarks}
           <path class="curve" d="${path}" stroke="${color}"></path>
           ${labels}
-          <text x="${pad.left}" y="15">${label}</text>
+          <text x="${pad.left}" y="15">${label}${invertY ? ' (Drawn on tension side)' : ''}</text>
         </svg>
       `;
     }
