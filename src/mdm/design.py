@@ -12,7 +12,7 @@ def row(ref: str, calc: str, out: str = "") -> str:
     </div>
     """
 
-def draw_section_svg(b, h, cover, link_dia, count, dia, count_c, dia_c, is_support):
+def draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support):
     scale = min(200.0 / b, 250.0 / h)
     dw = b * scale
     dh = h * scale
@@ -36,9 +36,9 @@ def draw_section_svg(b, h, cover, link_dia, count, dia, count_c, dia_c, is_suppo
     lines.append(f"<rect x='{link_x}' y='{link_y}' width='{link_w}' height='{link_h}' fill='none' stroke='#1f2937' stroke-width='{max(2.0, dlink)}' rx='4'/>")
     
     if is_support:
-        top_count, top_dia, bot_count, bot_dia = count, dia, count_c, dia_c
+        top_counts, top_dia, bot_counts, bot_dia = layer_counts, dia, layer_counts_c, dia_c
     else:
-        top_count, top_dia, bot_count, bot_dia = count_c, dia_c, count, dia
+        top_counts, top_dia, bot_counts, bot_dia = layer_counts_c, dia_c, layer_counts, dia
         
     def draw_bars(n, bar_dia, y_center):
         if n <= 0: return ""
@@ -54,15 +54,25 @@ def draw_section_svg(b, h, cover, link_dia, count, dia, count_c, dia_c, is_suppo
             circs.append(f"<circle cx='{cx}' cy='{y_center}' r='{max(3.0, r)}' fill='#111827'/>")
         return "".join(circs)
 
-    if top_count > 0:
+    if top_counts:
+        top_spacer = max(25.0, top_dia) * scale
         ty = oy + dcover + dlink + (top_dia / 2.0) * scale
-        lines.append(draw_bars(top_count, top_dia, ty))
-        lines.append(f"<text x='{ox + dw + 10}' y='{oy + dcover + 15}' fill='#1f2937' font-size='12' text-anchor='start'>{top_count}Y{int(top_dia)}</text>")
+        total_top = 0
+        for n in top_counts:
+            lines.append(draw_bars(n, top_dia, ty))
+            ty += top_spacer + top_dia * scale
+            total_top += n
+        lines.append(f"<text x='{ox + dw + 10}' y='{oy + dcover + 15}' fill='#1f2937' font-size='12' text-anchor='start'>{total_top}Y{int(top_dia)}</text>")
         
-    if bot_count > 0:
+    if bot_counts:
+        bot_spacer = max(25.0, bot_dia) * scale
         by = oy + dh - dcover - dlink - (bot_dia / 2.0) * scale
-        lines.append(draw_bars(bot_count, bot_dia, by))
-        lines.append(f"<text x='{ox + dw + 10}' y='{oy + dh - dcover - 5}' fill='#1f2937' font-size='12' text-anchor='start'>{bot_count}Y{int(bot_dia)}</text>")
+        total_bot = 0
+        for n in bot_counts:
+            lines.append(draw_bars(n, bot_dia, by))
+            by -= bot_spacer + bot_dia * scale
+            total_bot += n
+        lines.append(f"<text x='{ox + dw + 10}' y='{oy + dh - dcover - 5}' fill='#1f2937' font-size='12' text-anchor='start'>{total_bot}Y{int(bot_dia)}</text>")
         
     dim_y = oy + dh + 30
     lines.append(f"<line x1='{ox}' y1='{dim_y-5}' x2='{ox}' y2='{dim_y+5}' stroke='#6b7280'/>")
@@ -215,28 +225,33 @@ def design_section(
         html_lines.append(row(bs8110.REF_MAX_STEEL, max_steel_str, "EXCEEDS LIMIT"))
         
     # Select bar arrangement
-    count, dia, area_prov = select_bar_arrangement(As_req, b, cover, link_dia, is_compression=False, target_dia=int(main_bar_dia))
+    layer_counts, dia, area_prov = select_bar_arrangement(As_req, b, cover, link_dia, is_compression=False, target_dia=int(main_bar_dia))
     
     tension_loc = "Top" if is_support else "Bottom"
     compression_loc = "Bottom" if is_support else "Top"
     
     bar_str = f"<p><b>Tension Steel:</b> \\( A_{{s,req}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
-    if count > 0:
-        bar_out = f"Provide {count}Y{dia} ({tension_loc})<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
+    if layer_counts:
+        count = sum(layer_counts)
+        layers_str = f" in {len(layer_counts)} layers" if len(layer_counts) > 1 else ""
+        bar_out = f"Provide {count}Y{dia}{layers_str} ({tension_loc})<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
     else:
-        bar_str += f"<p>Cannot fit required reinforcement in a single layer. Provide \\( A_s \\ge {money(As_req)} \\text{{ mm}}^2 \\) in multiple layers.</p>"
+        bar_str += f"<p>Cannot fit required reinforcement in 2 layers. Provide \\( A_s \\ge {money(As_req)} \\text{{ mm}}^2 \\) in multiple layers.</p>"
         area_prov = As_req
         dia = main_bar_dia
+        layer_counts = []
         bar_out = f"Multiple layers ({tension_loc})"
         
-    count_c = 0
+    layer_counts_c = []
     dia_c = main_bar_dia
     
     if Asc_req > 0:
-        count_c, dia_c, area_prov_c = select_bar_arrangement(Asc_req, b, cover, link_dia, is_compression=True)
+        layer_counts_c, dia_c, area_prov_c = select_bar_arrangement(Asc_req, b, cover, link_dia, is_compression=True)
         bar_str += f"<p><b>Compression Steel:</b> \\( A'_{{sc,req}} = {money(Asc_req)} \\text{{ mm}}^2 \\)</p>"
-        if count_c > 0:
-            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c} ({compression_loc})<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
+        if layer_counts_c:
+            count_c = sum(layer_counts_c)
+            layers_c_str = f" in {len(layer_counts_c)} layers" if len(layer_counts_c) > 1 else ""
+            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c}{layers_c_str} ({compression_loc})<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
         else:
             bar_str += f"<p>Provide Compression Steel \\( A'_{{sc}} \\ge {money(Asc_req)} \\text{{ mm}}^2 \\).</p>"
             bar_out += f"<br/><br/>Multiple layers ({compression_loc})"
@@ -244,11 +259,12 @@ def design_section(
     html_lines.append(row(bs8110.REF_BAR_SELECTION, bar_str, bar_out))
             
     # Spacing Check
-    if count > 1:
-        actual_spacing = (b - 2 * cover - 2 * link_dia - count * dia) / (count - 1)
+    outer_count = layer_counts[0] if layer_counts else 1
+    if outer_count > 1:
+        actual_spacing = (b - 2 * cover - 2 * link_dia - outer_count * dia) / (outer_count - 1)
         min_spacing = max(dia, 25.0)
         
-        spacing_str = f"<p>Clear spacing = \\( \\frac{{{fmt(b)} - 2({fmt(cover)}) - 2({fmt(link_dia)}) - {count}({fmt(dia)})}}{{{count - 1}}} = {money(actual_spacing)} \\text{{ mm}} \\)</p>"
+        spacing_str = f"<p>Clear spacing = \\( \\frac{{{fmt(b)} - 2({fmt(cover)}) - 2({fmt(link_dia)}) - {outer_count}({fmt(dia)})}}{{{outer_count - 1}}} = {money(actual_spacing)} \\text{{ mm}} \\)</p>"
         if actual_spacing >= min_spacing:
             spacing_out = "Spacing OK"
         else:
@@ -337,7 +353,7 @@ def design_section(
         html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out))
 
     html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex justify-center'>")
-    html_lines.append(draw_section_svg(b, h, cover, link_dia, count, dia, count_c, dia_c, is_support))
+    html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support))
     html_lines.append("</div>")
 
     html_lines.append("</div>")

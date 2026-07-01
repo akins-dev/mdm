@@ -139,11 +139,11 @@ def get_bar_area(diameter: int, count: int = 1) -> float:
         return STANDARD_BAR_AREAS[diameter][count - 1]
     return count * math.pi * (diameter ** 2) / 4.0
 
-def select_bar_arrangement(required_area: float, b: float, cover: float, link_dia: float, max_agg_size: float = 20.0, is_compression: bool = False, target_dia: int = None) -> Tuple[int, int, float]:
+def select_bar_arrangement(required_area: float, b: float, cover: float, link_dia: float, max_agg_size: float = 20.0, is_compression: bool = False, target_dia: int = None) -> Tuple[List[int], int, float]:
     """
-    Find the optimal bar arrangement (count, diameter, area_provided) that provides at least the required area
-    and satisfies the spacing requirements in a single layer.
-    Returns (count, diameter, area_provided) or (0, 0, 0.0) if none found in one layer.
+    Find the optimal bar arrangement (layer_counts, diameter, area_provided) that provides at least the required area
+    and satisfies the spacing requirements in 1 or 2 layers.
+    Returns (layer_counts, diameter, area_provided) or ([], 0, 0.0) if none found.
     """
     best_arrangement = None
     min_area_surplus = float('inf')
@@ -159,35 +159,48 @@ def select_bar_arrangement(required_area: float, b: float, cover: float, link_di
         dias_to_try.insert(0, target_dia)
         
     for dia in dias_to_try:
-        # Find minimum number of bars to satisfy area
         count = 2 # Minimum 2 bars
         area_provided = 0.0
-        while count <= 10:
+        while count <= 20:
             area_provided = get_bar_area(dia, count)
             if area_provided >= required_area:
                 break
             count += 1
         
-        if count > 10 or area_provided < required_area:
+        if count > 20 or area_provided < required_area:
             continue
             
-        # Check spacing
-        # Minimum spacing between bars is the maximum of: max_agg_size + 5mm, bar diameter
         min_spacing = max(max_agg_size + 5.0, float(dia))
-        
-        # Total width available for bars
         available_width = b - 2 * cover - 2 * link_dia
         
-        # Width required
-        required_width = (count * dia) + ((count - 1) * min_spacing)
+        max_n_layer = int((available_width + min_spacing) // (dia + min_spacing))
         
-        if required_width <= available_width:
-            surplus = area_provided - required_area
-            if surplus < min_area_surplus:
-                min_area_surplus = surplus
-                best_arrangement = (count, dia, area_provided)
+        if max_n_layer < 2:
+            continue
+            
+        if count <= max_n_layer:
+            layer_counts = [count]
+        elif count <= 2 * max_n_layer:
+            l1 = max_n_layer
+            l2 = count - max_n_layer
+            if l2 < 2:
+                if l1 > 2:
+                    l1 -= 1
+                    l2 += 1
+                else:
+                    continue
+            layer_counts = [l1, l2]
+        else:
+            continue
+            
+        surplus = area_provided - required_area
+        penalty = 0.0 if len(layer_counts) == 1 else required_area * 0.1
+        
+        if (surplus + penalty) < min_area_surplus:
+            min_area_surplus = surplus + penalty
+            best_arrangement = (layer_counts, dia, area_provided)
                 
     if best_arrangement:
         return best_arrangement
-    return 0, 0, 0.0
+    return [], 0, 0.0
 

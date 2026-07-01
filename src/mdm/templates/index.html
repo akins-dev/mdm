@@ -790,16 +790,15 @@
 
     function selectDiagramLabels(points, maxAbsY) {
       const selected = [];
-      const seen = new Set();
       points.forEach((point, index) => {
         const isSupport = currentResults.diagrams.supports.some(support => Math.abs(support.x - point.x) < 1e-6);
         const isExtreme = Math.abs(Math.abs(point.y) - maxAbsY) < 1e-6;
         const isZero = Math.abs(point.y) < 1e-6;
         const isKey = Boolean(point.key);
         if (index === 0 || index === points.length - 1 || isSupport || isExtreme || isZero || isKey) {
-          const key = `${point.x.toFixed(4)}:${point.y.toFixed(4)}`;
-          if (!seen.has(key)) {
-            seen.add(key);
+          // Prevent near-identical points from generating duplicate labels
+          const isDuplicate = selected.some(s => Math.abs(s.x - point.x) < 0.05 && Math.abs(s.y - point.y) < 0.1);
+          if (!isDuplicate) {
             selected.push(point);
           }
         }
