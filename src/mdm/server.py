@@ -292,18 +292,29 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 if support_tasks:
                     critical_support = min(support_tasks, key=lambda t: t["M"])
                     support_tasks.remove(critical_support)
-                    critical_support["highlight_title"] = "MAX SUPPORT MOMENT"
 
                 critical_span = None
                 if span_tasks:
                     critical_span = max(span_tasks, key=lambda t: t["M"])
                     span_tasks.remove(critical_span)
-                    critical_span["highlight_title"] = "MAX SPAN MOMENT"
                 
                 all_tasks = []
-                if critical_support:
+                if critical_support and critical_span:
+                    if abs(critical_support["M"]) >= abs(critical_span["M"]):
+                        critical_support["highlight_title"] = "MAX SUPPORT MOMENT (ABSOLUTE MAX)"
+                        critical_span["highlight_title"] = "MAX SPAN MOMENT"
+                        all_tasks.append(critical_support)
+                        all_tasks.append(critical_span)
+                    else:
+                        critical_span["highlight_title"] = "MAX SPAN MOMENT (ABSOLUTE MAX)"
+                        critical_support["highlight_title"] = "MAX SUPPORT MOMENT"
+                        all_tasks.append(critical_span)
+                        all_tasks.append(critical_support)
+                elif critical_support:
+                    critical_support["highlight_title"] = "MAX SUPPORT MOMENT (ABSOLUTE MAX)"
                     all_tasks.append(critical_support)
-                if critical_span:
+                elif critical_span:
+                    critical_span["highlight_title"] = "MAX SPAN MOMENT (ABSOLUTE MAX)"
                     all_tasks.append(critical_span)
                 all_tasks.extend(span_tasks)
                 all_tasks.extend(support_tasks)

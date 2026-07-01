@@ -889,7 +889,7 @@
 
         const momentEq = `\\( \\Sigma M_{@${leftSup}} = 0 \\quad \\circlearrowright + \\)`;
         
-        let momentExpression = `${mlStr} \\text{ (}M_L\\text{)} `;
+        let momentExpression = `${mlStr} {\\color{#9ca3af} \\textit{(} M_L \\textit{)}} `;
         if (loadMoment !== 0) {
              let loadFormulas = [];
              if (span.udl > 0) {
@@ -900,12 +900,24 @@
                      loadFormulas.push(`(${p.load} \\times ${p.distance})`);
                  });
              }
-             momentExpression += `+ [${loadFormulas.join(' + ')}] \\text{ (Loads)} `;
+             momentExpression += `+ [${loadFormulas.join(' + ')}] {\\color{#9ca3af} \\textit{(Loads)}} `;
         }
-        momentExpression += `+ ${mrStr} \\text{ (}M_R\\text{)} - R_{${rightSup}} \\times ${span.length} = 0`;
+        momentExpression += `+ ${mrStr} {\\color{#9ca3af} \\textit{(} M_R \\textit{)}} - R_{${rightSup}} \\times ${span.length} = 0`;
 
         const forceEq = `\\( \\Sigma F_y = 0 \\quad \\uparrow + \\)`;
-        const forceExpression = `R_{${leftSup}} - ${totalLoad.toFixed(3)} \\text{ (Loads)} + ${rr.toFixed(3)} \\text{ (}R_{${rightSup}}\\text{)} = 0`;
+        
+        let forceLoadFormulas = [];
+        if (span.udl > 0) {
+            forceLoadFormulas.push(`(${span.udl} \\times ${span.length})`);
+        }
+        if (span.point_loads && span.point_loads.length > 0) {
+            span.point_loads.forEach(p => {
+                forceLoadFormulas.push(`${p.load}`);
+            });
+        }
+        let forceLoadString = forceLoadFormulas.length > 0 ? `[${forceLoadFormulas.join(' + ')}]` : "0";
+        
+        const forceExpression = `R_{${leftSup}} - ${forceLoadString} {\\color{#9ca3af} \\textit{(Loads)}} + ${rr.toFixed(3)} {\\color{#9ca3af} \\textit{(} R_{${rightSup}} \\textit{)}} = 0`;
 
         return `
         <div style="margin-bottom: 24px; padding: 16px; background: #fafafa; border: 1px solid var(--line); border-radius: 8px;">
