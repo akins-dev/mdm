@@ -12,6 +12,73 @@ def row(ref: str, calc: str, out: str = "") -> str:
     </div>
     """
 
+def draw_section_svg(b, h, cover, link_dia, count, dia, count_c, dia_c, is_support):
+    scale = min(200.0 / b, 250.0 / h)
+    dw = b * scale
+    dh = h * scale
+    dcover = cover * scale
+    dlink = link_dia * scale
+    
+    svg_w = dw + 100
+    svg_h = dh + 80
+    ox = 20
+    oy = 20
+    
+    lines = []
+    lines.append(f"<svg viewBox='0 0 {svg_w} {svg_h}' width='100%' style='max-width: {svg_w}px;'>")
+    lines.append("<defs><marker id='arrow' markerWidth='10' markerHeight='10' refX='5' refY='5' orient='auto-start-reverse'><path d='M 0 2 L 5 5 L 0 8 z' fill='#6b7280'/></marker></defs>")
+    lines.append(f"<rect x='{ox}' y='{oy}' width='{dw}' height='{dh}' fill='#e5e7eb' stroke='#374151' stroke-width='2'/>")
+    
+    link_x = ox + dcover
+    link_y = oy + dcover
+    link_w = dw - 2 * dcover
+    link_h = dh - 2 * dcover
+    lines.append(f"<rect x='{link_x}' y='{link_y}' width='{link_w}' height='{link_h}' fill='none' stroke='#1f2937' stroke-width='{max(2.0, dlink)}' rx='4'/>")
+    
+    if is_support:
+        top_count, top_dia, bot_count, bot_dia = count, dia, count_c, dia_c
+    else:
+        top_count, top_dia, bot_count, bot_dia = count_c, dia_c, count, dia
+        
+    def draw_bars(n, bar_dia, y_center):
+        if n <= 0: return ""
+        r = (bar_dia / 2.0) * scale
+        inner_w = dw - 2*dcover - 2*dlink - 2*r
+        spacing = inner_w / max(1, n - 1) if n > 1 else 0
+        start_x = ox + dcover + dlink + r
+        if n == 1: start_x = ox + dw / 2.0
+        
+        circs = []
+        for i in range(n):
+            cx = start_x + i * spacing
+            circs.append(f"<circle cx='{cx}' cy='{y_center}' r='{max(3.0, r)}' fill='#111827'/>")
+        return "".join(circs)
+
+    if top_count > 0:
+        ty = oy + dcover + dlink + (top_dia / 2.0) * scale
+        lines.append(draw_bars(top_count, top_dia, ty))
+        lines.append(f"<text x='{ox + dw + 10}' y='{oy + dcover + 15}' fill='#1f2937' font-size='12' text-anchor='start'>{top_count}Y{int(top_dia)}</text>")
+        
+    if bot_count > 0:
+        by = oy + dh - dcover - dlink - (bot_dia / 2.0) * scale
+        lines.append(draw_bars(bot_count, bot_dia, by))
+        lines.append(f"<text x='{ox + dw + 10}' y='{oy + dh - dcover - 5}' fill='#1f2937' font-size='12' text-anchor='start'>{bot_count}Y{int(bot_dia)}</text>")
+        
+    dim_y = oy + dh + 30
+    lines.append(f"<line x1='{ox}' y1='{dim_y-5}' x2='{ox}' y2='{dim_y+5}' stroke='#6b7280'/>")
+    lines.append(f"<line x1='{ox+dw}' y1='{dim_y-5}' x2='{ox+dw}' y2='{dim_y+5}' stroke='#6b7280'/>")
+    lines.append(f"<line x1='{ox}' y1='{dim_y}' x2='{ox+dw}' y2='{dim_y}' stroke='#6b7280' marker-start='url(#arrow)' marker-end='url(#arrow)'/>")
+    lines.append(f"<text x='{ox+dw/2}' y='{dim_y-5}' fill='#4b5563' font-size='12' text-anchor='middle'>{int(b)}</text>")
+    
+    dim_x = ox + dw + 45
+    lines.append(f"<line x1='{dim_x-5}' y1='{oy}' x2='{dim_x+5}' y2='{oy}' stroke='#6b7280'/>")
+    lines.append(f"<line x1='{dim_x-5}' y1='{oy+dh}' x2='{dim_x+5}' y2='{oy+dh}' stroke='#6b7280'/>")
+    lines.append(f"<line x1='{dim_x}' y1='{oy}' x2='{dim_x}' y2='{oy+dh}' stroke='#6b7280' marker-start='url(#arrow)' marker-end='url(#arrow)'/>")
+    lines.append(f"<text x='{dim_x+10}' y='{oy+dh/2+4}' fill='#4b5563' font-size='12' text-anchor='start'>{int(h)}</text>")
+    
+    lines.append("</svg>")
+    return "".join(lines)
+
 def design_section(
     name: str,
     M: float,
@@ -31,6 +98,7 @@ def design_section(
     
     html_lines = ["<div class='calc-sheet'>"]
     html_lines.append(f"<h4>Design for {name} {'(Support)' if is_support else '(Span)'}</h4>")
+    html_lines.append("<p class='text-sm text-gray-600 mb-2'><b>Note:</b> Section designed strictly as a Rectangular Beam (per Oyenuga). Partial safety factor for steel \\(\\gamma_m = 1.05\\), hence using \\(0.95 f_y\\) instead of \\(0.87 f_y\\).</p>")
     
     M_abs = abs(M)
     V_abs = abs(V)
@@ -77,13 +145,13 @@ def design_section(
         z_val = d * (0.5 + math.sqrt(abs(0.25 - K / 0.9)))
         z = min(z_val, 0.95 * d)
         
-        calc_str = f"<p>\\( M \\le M_u \\), Singly Reinforced Section<br/>\\( K = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>\\( z = {fmt(d)} [ 0.5 + \\sqrt{{0.25 - {money(K)}/0.9}} ] = {money(z_val)} \\text{{ mm}} \\)</p>"
+        calc_str = f"<p><b>Singly Reinforced</b> \\( (M \\le M_u) \\)<br/>\\( K = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)</p>"
         
         if z_val > 0.95 * d:
             calc_str += f"<p>\\( z \\) limited to \\( 0.95d = {money(0.95 * d)} \\text{{ mm}} \\).</p>"
             
         As_req = M_abs * 1e6 / (bs8110.PARTIAL_SAFETY_STEEL * fy_eff * z)
-        calc_str += f"<p>\\( A_s = \\frac{{{money(M_abs)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times {money(z)}}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
+        calc_str += f"<p>\\( A_s = \\frac{{{money(M_abs)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} f_y z}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times {money(z)}}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
         
         html_lines.append(row(
             bs8110.REF_ULTIMATE_MOMENT,
@@ -96,19 +164,19 @@ def design_section(
         x = (d - z) / 0.45
         d_prime_over_x = d_prime / x
         
-        calc_str = f"<p>\\( M > M_u \\), Doubly Reinforced Section<br/>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d [ 0.5 + \\sqrt{{0.25 - K'/0.9}} ] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
+        calc_str = f"<p><b>Doubly Reinforced</b> \\( (M > M_u) \\)<br/>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K'}}{{0.9}}}} \\right] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
         
         calc_str += f"<p>\\( d'/x = {money(d_prime_over_x)} \\). "
         if d_prime_over_x <= bs8110.LIMIT_D_PRIME_X:
-            calc_str += f"\\( \\le {bs8110.LIMIT_D_PRIME_X} \\), compression steel yielded.</p>"
+            calc_str += f"\\( \\le {bs8110.LIMIT_D_PRIME_X} \\) (yields).</p>"
         else:
-            calc_str += f"<span class='text-danger'>\\( > {bs8110.LIMIT_D_PRIME_X} \\), compression steel has NOT yielded!</span></p>"
+            calc_str += f"<span class='text-danger'>\\( > {bs8110.LIMIT_D_PRIME_X} \\) (no yield)</span></p>"
             
         Asc_req = (M_abs - Mu) * 1e6 / (bs8110.PARTIAL_SAFETY_STEEL * fy_eff * (d - d_prime))
-        calc_str += f"<p>\\( A'_{{sc}} = \\frac{{({money(M_abs)} - {money(Mu)}) \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times ({fmt(d)} - {money(d_prime)})}} = {money(Asc_req)} \\text{{ mm}}^2 \\)</p>"
+        calc_str += f"<p>\\( A'_{{sc}} = \\frac{{(M - M_u) \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} f_y (d - d')}} = \\frac{{({money(M_abs)} - {money(Mu)}) \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times ({fmt(d)} - {money(d_prime)})}} = {money(Asc_req)} \\text{{ mm}}^2 \\)</p>"
         
         As_req = (Mu * 1e6 / (bs8110.PARTIAL_SAFETY_STEEL * fy_eff * z)) + Asc_req
-        calc_str += f"<p>\\( A_s = \\frac{{{money(Mu)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times {money(z)}}} + {money(Asc_req)} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
+        calc_str += f"<p>\\( A_s = \\frac{{M_u \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} f_y z}} + A'_{{sc}} = \\frac{{{money(Mu)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times {money(z)}}} + {money(Asc_req)} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
         
         html_lines.append(row(
             bs8110.REF_COMPRESSION_YIELD,
@@ -122,7 +190,7 @@ def design_section(
     if As_req < As_min:
         html_lines.append(row(
             bs8110.REF_MIN_STEEL,
-            f"<p>Minimum tension steel: \\( A_{{s,min}} = {As_min_pct}\\% b h = {money(As_min)} \\text{{ mm}}^2 \\)</p>",
+            f"<p>\\( A_{{s,min}} = {As_min_pct}\\% b h = {money(As_min)} \\text{{ mm}}^2 \\)</p>",
             f"Use \\( A_s = {money(As_min)} \\text{{ mm}}^2 \\)"
         ))
         As_req = As_min
@@ -131,7 +199,7 @@ def design_section(
     if Asc_req > 0 and Asc_req < Asc_min:
         html_lines.append(row(
             bs8110.REF_MIN_STEEL,
-            f"<p>Minimum compression steel: \\( A'_{{sc,min}} = 0.2\\% b h = {money(Asc_min)} \\text{{ mm}}^2 \\)</p>",
+            f"<p>\\( A'_{{sc,min}} = 0.2\\% b h = {money(Asc_min)} \\text{{ mm}}^2 \\)</p>",
             f"Use \\( A'_{{sc}} = {money(Asc_min)} \\text{{ mm}}^2 \\)"
         ))
         Asc_req = Asc_min
@@ -149,23 +217,29 @@ def design_section(
     # Select bar arrangement
     count, dia, area_prov = select_bar_arrangement(As_req, b, cover, link_dia, is_compression=False, target_dia=int(main_bar_dia))
     
-    bar_str = f"<p>Main Tension Steel:<br/>Required: {money(As_req)} mm&sup2;</p>"
+    tension_loc = "Top" if is_support else "Bottom"
+    compression_loc = "Bottom" if is_support else "Top"
+    
+    bar_str = f"<p><b>Tension Steel:</b> \\( A_{{s,req}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
     if count > 0:
-        bar_out = f"Provide {count}Y{dia}<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
+        bar_out = f"Provide {count}Y{dia} ({tension_loc})<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
     else:
         bar_str += f"<p>Cannot fit required reinforcement in a single layer. Provide \\( A_s \\ge {money(As_req)} \\text{{ mm}}^2 \\) in multiple layers.</p>"
         area_prov = As_req
         dia = main_bar_dia
-        bar_out = "Multiple layers"
+        bar_out = f"Multiple layers ({tension_loc})"
         
+    count_c = 0
+    dia_c = main_bar_dia
+    
     if Asc_req > 0:
         count_c, dia_c, area_prov_c = select_bar_arrangement(Asc_req, b, cover, link_dia, is_compression=True)
-        bar_str += f"<p>Compression Steel:<br/>Required: {money(Asc_req)} mm&sup2;</p>"
+        bar_str += f"<p><b>Compression Steel:</b> \\( A'_{{sc,req}} = {money(Asc_req)} \\text{{ mm}}^2 \\)</p>"
         if count_c > 0:
-            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c}<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
+            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c} ({compression_loc})<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
         else:
             bar_str += f"<p>Provide Compression Steel \\( A'_{{sc}} \\ge {money(Asc_req)} \\text{{ mm}}^2 \\).</p>"
-            bar_out += "<br/><br/>Multiple layers"
+            bar_out += f"<br/><br/>Multiple layers ({compression_loc})"
             
     html_lines.append(row(bs8110.REF_BAR_SELECTION, bar_str, bar_out))
             
@@ -186,7 +260,7 @@ def design_section(
     # Shear Design
     fyv_eff = min(fyv, 460.0)
     v = V_abs * 1000 / (b * d)
-    shear_str = f"<p>Design shear stress \\( v = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {money(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
+    shear_str = f"<p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {money(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
     
     v_max = min(0.8 * math.sqrt(fcu), 5.0)
     if v > v_max:
@@ -210,20 +284,20 @@ def design_section(
     asv = 2 * get_bar_area(link_dia)
     link_str = ""
     if v < 0.5 * vc:
-        link_str = f"<p>\\( v < 0.5 v_c \\) ({money(0.5*vc)}). Nominal links in practice.<br/>"
+        link_str = f"<p>\\( v < 0.5 v_c \\) ({money(0.5*vc)}). Nominal links.<br/>"
         sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (0.4 * b)
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4 b}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4 b}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {money(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
     elif v <= vc + 0.4:
         link_str = f"<p>\\( v \\le v_c + 0.4 \\) ({money(vc+0.4)}). Nominal links.<br/>"
         sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (0.4 * b)
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4 b}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4 b}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {money(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
     else:
-        link_str = f"<p>\\( v > v_c + 0.4 \\). Design shear links required.<br/>"
+        link_str = f"<p>\\( v > v_c + 0.4 \\). Design links.<br/>"
         sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (b * (v - vc))
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{b (v - v_c)}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{b (v - v_c)}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {money(asv)} \\times {fmt(fyv_eff)}}}{{{fmt(b)} ({money(v)} - {money(vc)})}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
         
     sv_max = min(0.75 * d, 300)
-    link_str += f"<p>Maximum spacing \\( S_{{v,max}} = {money(sv_max)} \\text{{ mm}} \\).</p>"
+    link_str += f"<p>\\( S_{{v,max}} = {money(sv_max)} \\text{{ mm}} \\).</p>"
     
     sv = min(sv_req, sv_max)
     sv = math.floor(sv / 25.0) * 25.0
@@ -247,12 +321,12 @@ def design_section(
         allowable_span_d = basic_span_d * mf
         actual_span_d = span_length / d
         
-        defl_str = f"<p>Basic span/d for {support_cond} = {basic_span_d}<br/>"
+        defl_str = f"<p><b>Deflection ({support_cond})</b><br/>"
         defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"\\( \\frac{{M}}{{bd^2}} = {money(M_bd2)} \\text{{ N/mm}}^2 \\)<br/>"
-        defl_str += f"Mod. Factor = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
-        defl_str += f"Allowable span/d = \\( {basic_span_d} \\times {money(mf)} = {money(allowable_span_d)} \\)<br/>"
-        defl_str += f"Actual span/d = {money(actual_span_d)}</p>"
+        defl_str += f"M.F. = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
+        defl_str += f"Allowable = \\( {basic_span_d} \\times {money(mf)} = {money(allowable_span_d)} \\)<br/>"
+        defl_str += f"Actual = {money(actual_span_d)}</p>"
         
         if actual_span_d <= allowable_span_d:
             defl_out = "Deflection OK"
@@ -261,6 +335,10 @@ def design_section(
             defl_out = "Deflection FAIL"
             
         html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out))
+
+    html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex justify-center'>")
+    html_lines.append(draw_section_svg(b, h, cover, link_dia, count, dia, count_c, dia_c, is_support))
+    html_lines.append("</div>")
 
     html_lines.append("</div>")
     
