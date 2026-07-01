@@ -647,7 +647,7 @@
         const udlMarkup = udl > 0 ? drawUdl(x1, x2, beamY - 72, beamY - 18, `${udl.toFixed(2)} kN/m`) : '';
         const points = (span.point_loads || []).map(point => {
           const x = xScale(span.start + Number(point.distance));
-          return drawArrow(x, beamY - 78, x, beamY - 16, '#b42318', `${Number(point.load).toFixed(2)} kN`);
+          return drawArrow(x, beamY - 78, x, beamY - 16, '#d97706', `${Number(point.load).toFixed(2)} kN`);
         }).join('');
         return `
           <line x1="${x1}" y1="${beamY}" x2="${x2}" y2="${beamY}" stroke="#1b2430" stroke-width="4"></line>
@@ -680,6 +680,9 @@
             <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
               <path d="M0,0 L8,4 L0,8 Z" fill="#b42318"></path>
             </marker>
+            <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#d97706"></path>
+            </marker>
           </defs>
           ${spanLines}
           ${supportMarks}
@@ -703,7 +706,9 @@
     }
 
     function drawArrow(x1, y1, x2, y2, color, label) {
-      const marker = color === '#1264a3' ? 'arrow-blue' : 'arrow-red';
+      let marker = 'arrow-red';
+      if (color === '#1264a3') marker = 'arrow-blue';
+      else if (color === '#d97706') marker = 'arrow-orange';
       const textY = y1 < y2 ? y1 - 6 : y1 + 16;
       return `
         <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2.5" marker-end="url(#${marker})"></line>
@@ -732,9 +737,14 @@
       const labelPoints = selectDiagramLabels(points, maxAbsY);
       const labels = labelPoints
         .map((point, index) => {
-          const x = xScale(point.x) + 4;
+          let x = xScale(point.x) + 4;
           const isZero = Math.abs(point.y) < 1e-4;
-          const yOffset = isZero ? 14 : (index % 2 === 0 ? -8 : 16);
+          const yOffset = isZero ? 14 : (point.y > 0 ? -8 : 16);
+          let hasSameXPrev = index > 0 && Math.abs(labelPoints[index - 1].x - point.x) < 1e-6;
+          let hasSameXNext = index < labelPoints.length - 1 && Math.abs(labelPoints[index + 1].x - point.x) < 1e-6;
+          if (hasSameXPrev || hasSameXNext) {
+            x += 2;
+          }
           const y = yScale(point.y) + yOffset;
           const unit = label.includes('BMD') ? ' kNm' : ' kN';
           return `<text x="${x}" y="${y}">${Number(point.y).toFixed(2)}${unit}</text>`;

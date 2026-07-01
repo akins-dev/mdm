@@ -38,7 +38,7 @@ def design_section(
     html_lines.append(row(
         "Design Forces",
         f"<p>Design Moment \\( M = {money(M_abs)} \\text{{ kNm}} \\)<br/>Design Shear \\( V = {money(V_abs)} \\text{{ kN}} \\)</p>",
-        f"M = {money(M_abs)} kNm<br/>V = {money(V_abs)} kN"
+        f"\\( M = {money(M_abs)} \\text{{ kNm}} \\)<br/>\\( V = {money(V_abs)} \\text{{ kN}} \\)"
     ))
     
     # 1. Geometry and effective depth
@@ -48,7 +48,7 @@ def design_section(
     html_lines.append(row(
         bs8110.REF_EFFECTIVE_DEPTH,
         f"<p>\\( d = h - c - \\phi_v - \\frac{{\\phi}}{{2}} = {fmt(h)} - {fmt(cover)} - {fmt(link_dia)} - {fmt(main_bar_dia/2)} = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = c + \\phi_v + \\frac{{\\phi}}{{2}} = {fmt(cover)} + {fmt(link_dia)} + {fmt(main_bar_dia/2)} = {money(d_prime)} \\text{{ mm}} \\)</p>",
-        f"d = {money(d)} mm<br/>d' = {money(d_prime)} mm"
+        f"\\( d = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = {money(d_prime)} \\text{{ mm}} \\)"
     ))
     
     # 2. Ultimate Moment of Resistance
@@ -56,7 +56,7 @@ def design_section(
     html_lines.append(row(
         bs8110.REF_ULTIMATE_MOMENT,
         f"<p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p>",
-        f"M_u = {money(Mu)} kNm"
+        f"\\( M_u = {money(Mu)} \\text{{ kNm}} \\)"
     ))
     
     # Check if compression reinforcement is required
@@ -69,7 +69,7 @@ def design_section(
         html_lines.append(row(
             bs8110.REF_STEEL_YIELD,
             f"<p class='text-warning'><b>Note:</b> Characteristic yield strength \\( f_y \\) limited to 500 N/mm².</p>",
-            f"f_y = 500 N/mm²"
+            f"\\( f_y = 500 \\text{{ N/mm}}^2 \\)"
         ))
     
     if M_abs <= Mu:
@@ -88,7 +88,7 @@ def design_section(
         html_lines.append(row(
             bs8110.REF_ULTIMATE_MOMENT,
             calc_str,
-            f"z = {money(z)} mm<br/>A_s = {money(As_req)} mm&sup2;"
+            f"\\( z = {money(z)} \\text{{ mm}} \\)<br/>\\( A_s = {money(As_req)} \\text{{ mm}}^2 \\)"
         ))
         
     else:
@@ -113,7 +113,7 @@ def design_section(
         html_lines.append(row(
             bs8110.REF_COMPRESSION_YIELD,
             calc_str,
-            f"A'_{{sc}} = {money(Asc_req)} mm&sup2;<br/>A_s = {money(As_req)} mm&sup2;"
+            f"\\( A'_{{sc}} = {money(Asc_req)} \\text{{ mm}}^2 \\)<br/>\\( A_s = {money(As_req)} \\text{{ mm}}^2 \\)"
         ))
         
     # Minimum steel area
@@ -123,7 +123,7 @@ def design_section(
         html_lines.append(row(
             bs8110.REF_MIN_STEEL,
             f"<p>Minimum tension steel: \\( A_{{s,min}} = {As_min_pct}\\% b h = {money(As_min)} \\text{{ mm}}^2 \\)</p>",
-            f"Use A_s = {money(As_min)} mm&sup2;"
+            f"Use \\( A_s = {money(As_min)} \\text{{ mm}}^2 \\)"
         ))
         As_req = As_min
         
@@ -132,7 +132,7 @@ def design_section(
         html_lines.append(row(
             bs8110.REF_MIN_STEEL,
             f"<p>Minimum compression steel: \\( A'_{{sc,min}} = 0.2\\% b h = {money(Asc_min)} \\text{{ mm}}^2 \\)</p>",
-            f"Use A'_{{sc}} = {money(Asc_min)} mm&sup2;"
+            f"Use \\( A'_{{sc}} = {money(Asc_min)} \\text{{ mm}}^2 \\)"
         ))
         Asc_req = Asc_min
         
@@ -151,7 +151,7 @@ def design_section(
     
     bar_str = f"<p>Main Tension Steel:<br/>Required: {money(As_req)} mm&sup2;</p>"
     if count > 0:
-        bar_out = f"Provide {count}Y{dia}<br/>(A_s = {money(area_prov)} mm&sup2;)"
+        bar_out = f"Provide {count}Y{dia}<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
     else:
         bar_str += f"<p>Cannot fit required reinforcement in a single layer. Provide \\( A_s \\ge {money(As_req)} \\text{{ mm}}^2 \\) in multiple layers.</p>"
         area_prov = As_req
@@ -162,7 +162,7 @@ def design_section(
         count_c, dia_c, area_prov_c = select_bar_arrangement(Asc_req, b, cover, link_dia, is_compression=True)
         bar_str += f"<p>Compression Steel:<br/>Required: {money(Asc_req)} mm&sup2;</p>"
         if count_c > 0:
-            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c}<br/>(A'_{{sc}} = {money(area_prov_c)} mm&sup2;)"
+            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c}<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
         else:
             bar_str += f"<p>Provide Compression Steel \\( A'_{{sc}} \\ge {money(Asc_req)} \\text{{ mm}}^2 \\).</p>"
             bar_out += "<br/><br/>Multiple layers"
@@ -192,7 +192,7 @@ def design_section(
     if v > v_max:
         shear_str += f"<p class='text-danger'><b>WARNING:</b> \\( v \\) exceeds max allowed \\( {money(v_max)} \\text{{ N/mm}}^2 \\).</p>"
         
-    html_lines.append(row(bs8110.REF_MAX_SHEAR, shear_str, f"v = {money(v)} N/mm&sup2;"))
+    html_lines.append(row(bs8110.REF_MAX_SHEAR, shear_str, f"\\( v = {money(v)} \\text{{ N/mm}}^2 \\)"))
         
     percent_As = (100 * area_prov) / (b * d)
     percent_As_eff = min(max(percent_As, 0.15), 3.0)
@@ -205,7 +205,7 @@ def design_section(
     vc_str += f"Depth factor \\( (400/d)^{{1/4}} = {money(f_depth)} \\)<br/>"
     vc_str += f"\\( v_c = {money(vc)} \\text{{ N/mm}}^2 \\)</p>"
     
-    html_lines.append(row(bs8110.REF_SHEAR_CAPACITY, vc_str, f"v_c = {money(vc)} N/mm&sup2;"))
+    html_lines.append(row(bs8110.REF_SHEAR_CAPACITY, vc_str, f"\\( v_c = {money(vc)} \\text{{ N/mm}}^2 \\)"))
     
     asv = 2 * get_bar_area(link_dia)
     link_str = ""
