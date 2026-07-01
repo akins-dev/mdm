@@ -604,10 +604,7 @@
             <h2 class="subheading">Beam, Loads, and Support Reactions</h2>
             ${drawBeamSketch()}
           </div>
-          <div>
-            <h2 class="subheading">Maximum Values</h2>
-            ${buildTable(currentResults.tables.extrema.headers, currentResults.tables.extrema.rows)}
-          </div>
+
           <div>
             <h2 class="subheading">Shear Force Diagram</h2>
             <p class="formula">\\(V(x)=R_L-wx-\\Sigma P_{a\\le x}\\)</p>
@@ -723,7 +720,7 @@
       if (!points || points.length === 0) return '<p class="formula">No diagram data.</p>';
       const width = 980;
       const height = 300;
-      const pad = { left: 56, right: 20, top: 22, bottom: 42 };
+      const pad = { left: 56, right: 20, top: 35, bottom: 42 };
       const xs = points.map(point => point.x);
       const ys = points.map(point => point.y);
       const minX = Math.min(...xs);
@@ -786,8 +783,11 @@
           ${supportMarks}
           <path class="curve" d="${path}" stroke="${color}"></path>
           ${labels}
-          <text x="${pad.left}" y="15">${label}${invertY ? ' (Drawn on tension side)' : ''}</text>
+          <text x="${pad.left}" y="15" font-weight="bold" fill="#374151">${label}${invertY ? ' (Drawn on tension side)' : ''}</text>
         </svg>
+        <div style="text-align: center; font-weight: bold; margin-top: 10px; color: #4b5563; font-size: 15px;">
+          Maximum Absolute ${label === 'SFD' ? 'Shear Force' : 'Bending Moment'}: <span style="color: ${color};">${maxAbsY.toFixed(2)} ${invertY ? 'kNm' : 'kN'}</span>
+        </div>
       `;
     }
 

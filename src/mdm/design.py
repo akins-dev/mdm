@@ -104,11 +104,17 @@ def design_section(
     main_bar_dia: float = 20.0,
     link_dia: float = 10.0,
     span_length: float = 0.0,
-    support_cond: str = "Continuous"
+    support_cond: str = "Continuous",
+    highlight_title: str = ""
 ) -> Dict[str, Any]:
     
     html_lines = ["<div class='calc-sheet'>"]
-    html_lines.append(f"<h4>Design for {name} {'(Support)' if is_support else '(Span)'}</h4>")
+    
+    header_text = f"Design for {name} {'(Support)' if is_support else '(Span)'}"
+    if highlight_title:
+        header_text += f" - <span style='background-color: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;'>{highlight_title}</span>"
+        
+    html_lines.append(f"<h4>{header_text}</h4>")
     html_lines.append("<p class='text-sm text-gray-600 mb-2'><b>Note:</b> Section designed strictly as a Rectangular Beam (per Oyenuga). Partial safety factor for steel \\(\\gamma_m = 1.05\\), hence using \\(0.95 f_y\\) instead of \\(0.87 f_y\\).</p>")
     
     M_abs = abs(M)

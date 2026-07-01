@@ -229,12 +229,10 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 # To get raw floats, let's use the 'beam' data from analysis
                 beam_data = analysis.get("beam", {})
                 span_infos = beam_data.get("spans", [])
-                supports = beam_data.get("supports", [])
                 
+                span_tasks = []
                 for span_info in span_infos:
                     span_name = span_info.get("name")
-                    # Find maximum sagging moment (positive moment) and max absolute shear in the span
-                    # We need to look at the moment_values and shear_values arrays for this span
                     moment_values = analysis.get("tables", {}).get("moment_values", {}).get("rows", [])
                     shear_values = analysis.get("tables", {}).get("shear_values", {}).get("rows", [])
                     
@@ -253,50 +251,76 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                                 max_abs_shear = v_val
                                 
                     if max_sagging_moment > 0.0:
-                        span_length_mm = float(span_info.get("length", 0)) * 1000.0
-                        report = design_section(
-                            name=span_name,
-                            M=max_sagging_moment,
-                            V=max_abs_shear,
-                            is_support=False,
-                            fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
-                            main_bar_dia=main_bar_dia, link_dia=link_dia,
-                            span_length=span_length_mm, support_cond=support_cond
-                        )
-                        reports.append(report["html"])
-                        
-                # Now design for supports (hogging moments, negative)
+                        span_tasks.append({
+                            "name": span_name,
+                            "M": max_sagging_moment,
+                            "V": max_abs_shear,
+                            "is_support": False,
+                            "span_length_mm": float(span_info.get("length", 0)) * 1000.0,
+                            "support_cond": support_cond
+                        })
+
+                support_tasks = []
                 for span_info in span_infos:
-                    span_name = span_info.get("name")
-                    # Check left support
                     ml = float(span_info.get("ml", 0))
                     if ml < -0.01:
-                        # Find max shear near left support
                         max_abs_shear = abs(float(span_info.get("left_reaction", 0)))
-                        report = design_section(
-                            name=f"Support {span_info.get('left')}",
-                            M=ml,
-                            V=max_abs_shear,
-                            is_support=True,
-                            fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
-                            main_bar_dia=main_bar_dia, link_dia=link_dia
-                        )
-                        reports.append(report["html"])
+                        # Ensure we don't add duplicate inner supports (they share the same label)
+                        name = f"Support {span_info.get('left')}"
+                        if not any(t["name"] == name for t in support_tasks):
+                            support_tasks.append({
+                                "name": name,
+                                "M": ml,
+                                "V": max_abs_shear,
+                                "is_support": True
+                            })
                         
-                    # For the last span, check right support
                     if span_info == span_infos[-1]:
                         mr = float(span_info.get("mr", 0))
                         if mr < -0.01:
                             max_abs_shear = abs(float(span_info.get("right_reaction", 0)))
-                            report = design_section(
-                                name=f"Support {span_info.get('right')}",
-                                M=mr,
-                                V=max_abs_shear,
-                                is_support=True,
-                                fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
-                                main_bar_dia=main_bar_dia, link_dia=link_dia
-                            )
-                            reports.append(report["html"])
+                            name = f"Support {span_info.get('right')}"
+                            if not any(t["name"] == name for t in support_tasks):
+                                support_tasks.append({
+                                    "name": name,
+                                    "M": mr,
+                                    "V": max_abs_shear,
+                                    "is_support": True
+                                })
+                
+                critical_support = None
+                if support_tasks:
+                    critical_support = min(support_tasks, key=lambda t: t["M"])
+                    support_tasks.remove(critical_support)
+                    critical_support["highlight_title"] = "MAX SUPPORT MOMENT"
+
+                critical_span = None
+                if span_tasks:
+                    critical_span = max(span_tasks, key=lambda t: t["M"])
+                    span_tasks.remove(critical_span)
+                    critical_span["highlight_title"] = "MAX SPAN MOMENT"
+                
+                all_tasks = []
+                if critical_support:
+                    all_tasks.append(critical_support)
+                if critical_span:
+                    all_tasks.append(critical_span)
+                all_tasks.extend(span_tasks)
+                all_tasks.extend(support_tasks)
+
+                for t in all_tasks:
+                    report = design_section(
+                        name=t["name"],
+                        M=t["M"],
+                        V=t["V"],
+                        is_support=t["is_support"],
+                        fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
+                        main_bar_dia=main_bar_dia, link_dia=link_dia,
+                        span_length=t.get("span_length_mm", 0.0),
+                        support_cond=t.get("support_cond", support_cond),
+                        highlight_title=t.get("highlight_title", "")
+                    )
+                    reports.append(report["html"])
                             
                 self.send_json(200, {"reports": reports})
             except Exception as error:
