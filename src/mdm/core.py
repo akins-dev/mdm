@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import math
 
 @dataclass
@@ -39,25 +39,31 @@ class Span:
 
         return fem_left, fem_right
 
-    def fixed_end_detail_rows(self) -> List[List[str]]:
-        rows: List[List[str]] = []
+    def fixed_end_detail_rows(self) -> List[List[Any]]:
+        rows: List[List[Any]] = []
+        base_rows = (2 if self.udl else 0) + 2 * len(self.point_loads)
+        total_rows = 2 if base_rows == 0 else (base_rows + (2 if base_rows > 2 else 0))
+        
+        span_val = {"value": self.name, "rowspan": total_rows}
+
         if self.udl:
             left_value = -(self.udl * self.length**2) / 12.0
             right_value = (self.udl * self.length**2) / 12.0
             rows.append(
                 [
-                    self.name,
-                    "UDL",
+                    span_val,
+                    {"value": "UDL", "rowspan": 2},
                     self.left_end,
                     "\\(-wL^2/12\\)",
                     f"\\(-({fmt(self.udl)} \\times {fmt(self.length)}^2) / 12\\)",
                     money(left_value),
                 ]
             )
+            span_val = None
             rows.append(
                 [
-                    self.name,
-                    "UDL",
+                    span_val,
+                    None,
                     self.right_end,
                     "\\(wL^2/12\\)",
                     f"\\(({fmt(self.udl)} \\times {fmt(self.length)}^2) / 12\\)",
@@ -71,18 +77,19 @@ class Span:
             right_value = (load * a**2 * b) / self.length**2
             rows.append(
                 [
-                    self.name,
-                    f"Point {index}",
+                    span_val,
+                    {"value": f"Point {index}", "rowspan": 2},
                     self.left_end,
                     "\\(-Pab^2/L^2\\)",
                     f"\\(-({fmt(load)} \\times {fmt(a)} \\times {fmt(b)}^2) / {fmt(self.length)}^2\\)",
                     money(left_value),
                 ]
             )
+            span_val = None
             rows.append(
                 [
-                    self.name,
-                    f"Point {index}",
+                    span_val,
+                    None,
                     self.right_end,
                     "\\(Pa^2b/L^2\\)",
                     f"\\(({fmt(load)} \\times {fmt(a)}^2 \\times {fmt(b)}) / {fmt(self.length)}^2\\)",
@@ -91,13 +98,16 @@ class Span:
             )
 
         if not rows:
-            rows.append([self.name, "No load", self.left_end, "\\(0\\)", "\\(0\\)", money(0.0)])
-            rows.append([self.name, "No load", self.right_end, "\\(0\\)", "\\(0\\)", money(0.0)])
+            rows.append([span_val, {"value": "No load", "rowspan": 2}, self.left_end, "\\(0\\)", "\\(0\\)", money(0.0)])
+            span_val = None
+            rows.append([span_val, None, self.right_end, "\\(0\\)", "\\(0\\)", money(0.0)])
 
         left_total, right_total = self.fixed_end_moments()
         if len(rows) > 2:
-            rows.append([self.name, "Total", self.left_end, "\\(\\Sigma M_L\\)", "sum of left-end contributions", money(left_total)])
-            rows.append([self.name, "Total", self.right_end, "\\(\\Sigma M_R\\)", "sum of right-end contributions", money(right_total)])
+            rows.append([span_val, {"value": "Total", "rowspan": 2}, self.left_end, "\\(\\Sigma M_L\\)", "sum of left-end contributions", money(left_total)])
+            span_val = None
+            rows.append([span_val, None, self.right_end, "\\(\\Sigma M_R\\)", "sum of right-end contributions", money(right_total)])
+            
         return rows
 
 
