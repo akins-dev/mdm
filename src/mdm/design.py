@@ -105,10 +105,12 @@ def design_section(
     link_dia: float = 10.0,
     span_length: float = 0.0,
     support_cond: str = "Continuous",
-    highlight_title: str = ""
+    highlight_title: str = "",
+    bg_color: str = ""
 ) -> Dict[str, Any]:
     
-    html_lines = ["<div class='calc-sheet'>"]
+    style_attr = f" style='background-color: {bg_color}; border-color: #f59e0b; border-width: 2px;'" if bg_color else ""
+    html_lines = [f"<div class='calc-sheet'{style_attr}>"]
     
     header_text = f"Design for {name} {'(Support)' if is_support else '(Span)'}"
     if highlight_title:

@@ -288,36 +288,25 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                                     "is_support": True
                                 })
                 
-                critical_support = None
-                if support_tasks:
-                    critical_support = min(support_tasks, key=lambda t: t["M"])
-                    support_tasks.remove(critical_support)
-
-                critical_span = None
-                if span_tasks:
-                    critical_span = max(span_tasks, key=lambda t: t["M"])
-                    span_tasks.remove(critical_span)
+                all_tasks = span_tasks + support_tasks
                 
-                all_tasks = []
-                if critical_support and critical_span:
-                    if abs(critical_support["M"]) >= abs(critical_span["M"]):
-                        critical_support["highlight_title"] = "MAX SUPPORT MOMENT (ABSOLUTE MAX)"
-                        critical_span["highlight_title"] = "MAX SPAN MOMENT"
-                        all_tasks.append(critical_support)
-                        all_tasks.append(critical_span)
-                    else:
-                        critical_span["highlight_title"] = "MAX SPAN MOMENT (ABSOLUTE MAX)"
-                        critical_support["highlight_title"] = "MAX SUPPORT MOMENT"
-                        all_tasks.append(critical_span)
-                        all_tasks.append(critical_support)
-                elif critical_support:
-                    critical_support["highlight_title"] = "MAX SUPPORT MOMENT (ABSOLUTE MAX)"
-                    all_tasks.append(critical_support)
-                elif critical_span:
-                    critical_span["highlight_title"] = "MAX SPAN MOMENT (ABSOLUTE MAX)"
-                    all_tasks.append(critical_span)
-                all_tasks.extend(span_tasks)
-                all_tasks.extend(support_tasks)
+                if all_tasks:
+                    max_moment_task = max(all_tasks, key=lambda t: abs(t["M"]))
+                    global_M = max_moment_task["M"]
+                    global_is_support = max_moment_task["is_support"]
+                    global_V = max(t["V"] for t in all_tasks)
+                    
+                    envelope_task = {
+                        "name": "Global Envelope (All Spans & Supports)",
+                        "M": global_M,
+                        "V": global_V,
+                        "is_support": global_is_support,
+                        "highlight_title": "DESIGN FOR MAXIMUM VALUES",
+                        "bg_color": "#fffbeb",
+                        "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
+                        "support_cond": support_cond
+                    }
+                    all_tasks.insert(0, envelope_task)
 
                 for t in all_tasks:
                     report = design_section(
@@ -329,7 +318,8 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                         main_bar_dia=main_bar_dia, link_dia=link_dia,
                         span_length=t.get("span_length_mm", 0.0),
                         support_cond=t.get("support_cond", support_cond),
-                        highlight_title=t.get("highlight_title", "")
+                        highlight_title=t.get("highlight_title", ""),
+                        bg_color=t.get("bg_color", "")
                     )
                     reports.append(report["html"])
                             
