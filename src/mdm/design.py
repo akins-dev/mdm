@@ -113,7 +113,8 @@ def design_section(
     style_attr = f" style='background-color: {bg_color}; border-color: #f59e0b; border-width: 2px;'" if bg_color else ""
     html_lines = [f"<div class='calc-sheet'{style_attr}>"]
     
-    header_text = f"Design for {name} {'(Support)' if is_support else '(Span)'}"
+    suffix = f" {'(Support)' if is_support else '(Span)'}" if show_position else ""
+    header_text = f"Design for {name}{suffix}"
     if highlight_title:
         header_text += f" - <span style='background-color: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;'>{highlight_title}</span>"
         
@@ -386,7 +387,7 @@ def design_section(
     html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
     
     # Deflection Check
-    if not is_support and span_length > 0:
+    if (not is_support or not show_position) and span_length > 0:
         if support_cond.lower() == "cantilever":
             basic_span_d = 7
         elif support_cond.lower() == "simply supported":
@@ -402,12 +403,15 @@ def design_section(
         allowable_span_d = basic_span_d * mf
         actual_span_d = span_length / d
         
-        defl_str = f"<p><b>Deflection ({support_cond})</b><br/>"
+        defl_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Deflection Check ({support_cond})</div><p>"
         defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"\\( \\frac{{M}}{{bd^2}} = {money(M_bd2)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"M.F. = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
-        defl_str += f"Allowable = \\( {basic_span_d} \\times {money(mf)} = {money(allowable_span_d)} \\)<br/>"
-        defl_str += f"Actual = {money(actual_span_d)}</p>"
+        defl_str += f"Allowable span/d = \\( {basic_span_d} \\times {money(mf)} = {money(allowable_span_d)} \\)<br/>"
+        if not show_position:
+            defl_str += f"Actual span/d (using max span length) = \\( \\frac{{{money(span_length)}}}{{{fmt(d)}}} = {money(actual_span_d)} \\)</p>"
+        else:
+            defl_str += f"Actual span/d = \\( \\frac{{{money(span_length)}}}{{{fmt(d)}}} = {money(actual_span_d)} \\)</p>"
         
         if actual_span_d <= allowable_span_d:
             defl_out = f"Deflection OK<br/>\\( (\\text{{Actual}} \\le \\text{{Allowable}}) \\)"
