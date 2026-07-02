@@ -162,10 +162,14 @@ def design_section(
         z_val = d * (0.5 + math.sqrt(abs(0.25 - K / 0.9)))
         z = min(z_val, 0.95 * d)
         
-        calc_str = f"<p><b>Singly Reinforced</b> \\( (M \\le M_u) \\)<br/>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)</p>"
+        calc_str = f"<p><b>Singly Reinforced</b> \\( (M \\le M_u) \\)<br/>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>"
+        calc_str += f"\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)<br/>"
+        calc_str += f"\\( z \\le 0.95d \\Rightarrow z \\le {money(0.95 * d)} \\text{{ mm}} \\)<br/>"
         
         if z_val > 0.95 * d:
-            calc_str += f"<p>\\( z \\) limited to \\( 0.95d = {money(0.95 * d)} \\text{{ mm}} \\).</p>"
+            calc_str += f"Since \\( z > 0.95d \\), adopt \\( z = {money(0.95 * d)} \\text{{ mm}} \\)</p>"
+        else:
+            calc_str += f"Since \\( z \\le 0.95d \\), adopt \\( z = {money(z_val)} \\text{{ mm}} \\)</p>"
             
         As_req = M_abs * 1e6 / (bs8110.PARTIAL_SAFETY_STEEL * fy_eff * z)
         calc_str += f"<p>\\( A_s = \\frac{{M}}{{{bs8110.PARTIAL_SAFETY_STEEL} f_y z}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times {money(z)}}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
