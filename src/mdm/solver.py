@@ -51,15 +51,31 @@ def build_standard_distribution_rows(
 ) -> Tuple[List[List[str]], Dict[str, float], Dict[str, List[str]], Dict[str, str]]:
     rows, distribution_factors, joint_ends, opposite = build_distribution_rows(spans, supports, fixed_supports)
     standard_rows: List[List[str]] = []
+    joint_counts = {}
+    for r in rows:
+        joint_counts[r[0]] = joint_counts.get(r[0], 0) + 1
+        
+    seen_joints = set()
+    
     for joint, span_name, end, stiffness, joint_sum, df in rows:
         span = next(span for span in spans if span.name == span_name)
+        
+        if joint not in seen_joints:
+            count = joint_counts[joint]
+            joint_val = {"value": joint, "rowspan": count}
+            sum_val = {"value": joint_sum, "rowspan": count}
+            seen_joints.add(joint)
+        else:
+            joint_val = None
+            sum_val = None
+            
         standard_rows.append(
             [
-                joint,
+                joint_val,
                 end,
-                f"\\(k=1/L=1/{fmt(span.length)}={stiffness}\\)",
-                f"\\(\\Sigma k={joint_sum}\\)",
-                f"\\(DF=k/\\Sigma k={df}\\)",
+                f"\\(1/{fmt(span.length)} = {stiffness}\\)",
+                sum_val,
+                df,
             ]
         )
     return standard_rows, distribution_factors, joint_ends, opposite

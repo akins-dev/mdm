@@ -582,7 +582,16 @@
 
     function buildTable(headers, rows) {
       const head = headers.map(header => `<th>${formatCell(header)}</th>`).join('');
-      const body = rows.map(row => `<tr class="${rowClass(row)}">${row.map(cell => `<td>${formatCell(cell)}</td>`).join('')}</tr>`).join('');
+      const body = rows.map(row => {
+        const rowCells = row.map(cell => {
+          if (cell === null || cell === undefined) return '';
+          if (typeof cell === 'object' && cell !== null && cell.rowspan) {
+            return `<td rowspan="${cell.rowspan}" style="vertical-align: middle;">${formatCell(cell.value)}</td>`;
+          }
+          return `<td>${formatCell(cell)}</td>`;
+        }).join('');
+        return `<tr class="${rowClass(row)}">${rowCells}</tr>`;
+      }).join('');
       return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
     }
 

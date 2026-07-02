@@ -109,7 +109,7 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
         ),
         "tables": {
             "distribution": {
-                "headers": ["Joints", "Member", "Stiffness (k)", "\\(\\Sigma k\\)", "DF"],
+                "headers": ["Joints", "Member", "Stiffness \\(k = 1/L\\)", "\\(\\Sigma k\\)", "DF \\( = k / \\Sigma k\\)"],
                 "rows": distribution_rows,
             },
             "fem": {
