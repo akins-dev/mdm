@@ -106,7 +106,8 @@ def design_section(
     span_length: float = 0.0,
     support_cond: str = "Continuous",
     highlight_title: str = "",
-    bg_color: str = ""
+    bg_color: str = "",
+    show_position: bool = True
 ) -> Dict[str, Any]:
     
     style_attr = f" style='background-color: {bg_color}; border-color: #f59e0b; border-width: 2px;'" if bg_color else ""
@@ -134,7 +135,7 @@ def design_section(
     
     html_lines.append(row(
         bs8110.REF_EFFECTIVE_DEPTH,
-        f"<p>\\( d = h - c - \\phi_v - \\frac{{\\phi}}{{2}} = {fmt(h)} - {fmt(cover)} - {fmt(link_dia)} - {fmt(main_bar_dia/2)} = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = c + \\phi_v + \\frac{{\\phi}}{{2}} = {fmt(cover)} + {fmt(link_dia)} + {fmt(main_bar_dia/2)} = {money(d_prime)} \\text{{ mm}} \\)</p>",
+        f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Section Properties</div><p>\\( d = h - c - \\phi_v - \\frac{{\\phi}}{{2}} = {fmt(h)} - {fmt(cover)} - {fmt(link_dia)} - {fmt(main_bar_dia/2)} = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = c + \\phi_v + \\frac{{\\phi}}{{2}} = {fmt(cover)} + {fmt(link_dia)} + {fmt(main_bar_dia/2)} = {money(d_prime)} \\text{{ mm}} \\)</p>",
         f"\\( d = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = {money(d_prime)} \\text{{ mm}} \\)"
     ))
     
@@ -142,7 +143,7 @@ def design_section(
     Mu = bs8110.K_PRIME * fcu * b * (d ** 2) / 1e6
     html_lines.append(row(
         bs8110.REF_ULTIMATE_MOMENT,
-        f"<p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p>",
+        f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Moment Calculation</div><p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p>",
         f"\\( M_u = {money(Mu)} \\text{{ kNm}} \\)"
     ))
     
@@ -240,20 +241,23 @@ def design_section(
     # Select bar arrangement
     layer_counts, dia, area_prov = select_bar_arrangement(As_req, b, cover, link_dia, is_compression=False, target_dia=int(main_bar_dia))
     
-    tension_loc = "Top" if is_support else "Bottom"
-    compression_loc = "Bottom" if is_support else "Top"
+    tension_loc = ""
+    compression_loc = ""
+    if show_position:
+        tension_loc = " (Top)" if is_support else " (Bottom)"
+        compression_loc = " (Bottom)" if is_support else " (Top)"
     
     bar_str = f"<p><b>Tension Steel:</b> \\( A_{{s,req}} = {money(As_req)} \\text{{ mm}}^2 \\)</p>"
     if layer_counts:
         count = sum(layer_counts)
         layers_str = f" in {len(layer_counts)} layers" if len(layer_counts) > 1 else ""
-        bar_out = f"Provide {count}Y{dia}{layers_str} ({tension_loc})<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
+        bar_out = f"Provide {count}Y{dia}{layers_str}{tension_loc}<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
     else:
         bar_str += f"<p>Cannot fit required reinforcement in 2 layers. Provide \\( A_s \\ge {money(As_req)} \\text{{ mm}}^2 \\) in multiple layers.</p>"
         area_prov = As_req
         dia = main_bar_dia
         layer_counts = []
-        bar_out = f"Multiple layers ({tension_loc})"
+        bar_out = f"Multiple layers{tension_loc}"
         
     layer_counts_c = []
     dia_c = main_bar_dia
@@ -264,10 +268,10 @@ def design_section(
         if layer_counts_c:
             count_c = sum(layer_counts_c)
             layers_c_str = f" in {len(layer_counts_c)} layers" if len(layer_counts_c) > 1 else ""
-            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c}{layers_c_str} ({compression_loc})<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
+            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c}{layers_c_str}{compression_loc}<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
         else:
             bar_str += f"<p>Provide Compression Steel \\( A'_{{sc}} \\ge {money(Asc_req)} \\text{{ mm}}^2 \\).</p>"
-            bar_out += f"<br/><br/>Multiple layers ({compression_loc})"
+            bar_out += f"<br/><br/>Multiple layers{compression_loc}"
             
     html_lines.append(row("", bar_str, bar_out))
             
@@ -277,7 +281,8 @@ def design_section(
         min_spacing = max(dia, 25.0)
         b_req = 2 * cover + 2 * link_dia + outer_count * dia + (outer_count - 1) * min_spacing
         
-        min_spacing_calc_str = f"spacing = bar diameter (\\( \\phi \\)) or \\( h_{{agg}} + 5 \\), whichever is greater.<br/>"
+        min_spacing_calc_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Spacing Check</div>"
+        min_spacing_calc_str += f"spacing = bar diameter (\\( \\phi \\)) or \\( h_{{agg}} + 5 \\), whichever is greater.<br/>"
         min_spacing_calc_str += f"spacing = {fmt(dia)} or {20 + 5} = {fmt(min_spacing)} mm<br/>"
         
         spacing_str = f"<p>{min_spacing_calc_str}"
@@ -285,7 +290,7 @@ def design_section(
         spacing_str += f"\\( b_{{req}} = 2({fmt(cover)}) + 2({fmt(link_dia)}) + {outer_count}({fmt(dia)}) + {outer_count - 1}({fmt(min_spacing)}) = {fmt(b_req)} \\text{{ mm}} \\)</p>"
         
         if b_req <= b:
-            spacing_out = f"Spacing OK<br/>\\( (b_{{req}} \\le b) \\)"
+            spacing_out = f"\\( (b_{{req}} \\le b) \\)<br/>Spacing OK"
             spacing_status = "success"
         else:
             spacing_str += f"<p class='text-danger'><b>WARNING:</b> Required width ({money(b_req)} mm) &gt; Beam width ({fmt(b)} mm).</p>"
@@ -297,7 +302,7 @@ def design_section(
     # Shear Design
     fyv_eff = min(fyv, 460.0)
     v = V_abs * 1000 / (b * d)
-    shear_str = f"<p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
+    shear_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Shear Design</div><p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
     
     v_max_calc = 0.8 * math.sqrt(fcu)
     v_max = min(v_max_calc, 5.0)
@@ -309,7 +314,7 @@ def design_section(
         shear_out = "SECTION INADEQUATE"
         shear_status = "danger"
     else:
-        shear_out = f"Section OK<br/>\\( (v \\le v_{{max}}) \\)"
+        shear_out = f"\\( (v \\le v_{{max}}) \\)<br/>Section OK"
         shear_status = "success"
         
     html_lines.append(row(bs8110.REF_MAX_SHEAR, shear_str, shear_out, shear_status))
@@ -327,6 +332,18 @@ def design_section(
     
     html_lines.append(row(bs8110.REF_SHEAR_CAPACITY, vc_str, f"\\( v_c = {money(vc)} \\text{{ N/mm}}^2 \\)"))
     
+    if v < 0.5 * vc:
+        req_str = f"<b>Condition satisfied:</b> \\( v < 0.5v_c \\)<br/>\\( {money(v)} < {money(0.5*vc)} \\)"
+        req_out = "Shear reinforcement<br/>not required"
+    elif v <= vc + 0.4:
+        req_str = f"<b>Condition satisfied:</b> \\( 0.5v_c < v \\le (v_c + 0.4) \\)<br/>\\( {money(0.5*vc)} < {money(v)} \\le {money(vc+0.4)} \\)"
+        req_out = "Shear reinforcement<br/>required"
+    else:
+        req_str = f"<b>Condition satisfied:</b> \\( (v_c + 0.4) < v \\)<br/>\\( {money(vc+0.4)} < {money(v)} \\)"
+        req_out = "Shear reinforcement<br/>required"
+        
+    html_lines.append(row("Table 3.7", req_str, req_out, "success"))
+    
     asv_single = get_bar_area(link_dia)
     asv = 2 * asv_single
     
@@ -337,37 +354,29 @@ def design_section(
     link_out = ""
     
     if v < 0.5 * vc:
-        link_str += f"<p><b>Condition:</b> \\( v < 0.5v_c \\)<br/>"
-        link_str += f"\\( {money(v)} < 0.5({money(vc)}) \\)<br/>"
-        link_str += f"\\( {money(v)} < {money(0.5*vc)} \\)</p>"
         link_str += f"<p>Shear reinforcement is not required.</p>"
         link_out = "None Required"
     elif v <= vc + 0.4:
-        link_str += f"<p><b>Condition:</b> \\( 0.5v_c < v \\le (v_c + 0.4) \\)<br/>"
-        link_str += f"\\( {money(0.5*vc)} < {money(v)} \\le ({money(vc)} + 0.4) \\)<br/>"
-        link_str += f"\\( {money(0.5*vc)} < {money(v)} \\le {money(vc+0.4)} \\)</p>"
-        link_str += f"<p>Minimum links for whole length of beam.<br/>"
+        link_str += f"<p>\\( A_{{sv}} \\ge \\frac{{0.4b S_v}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4b}} \\)<br/>"
         link_str += asv_str
-        link_str += f"\\( A_{{sv}} \\ge \\frac{{0.4b S_v}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
         sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (0.4 * b)
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4b}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
     else:
-        link_str += f"<p><b>Condition:</b> \\( (v_c + 0.4) < v \\)<br/>"
-        link_str += f"\\( {money(vc+0.4)} < {money(v)} \\)</p>"
-        link_str += f"<p>Design links required.<br/>"
+        link_str += f"<p>\\( A_{{sv}} \\ge \\frac{{b S_v (v - v_c)}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{b(v - v_c)}} \\)<br/>"
         link_str += asv_str
-        link_str += f"\\( A_{{sv}} \\ge \\frac{{b S_v (v - v_c)}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
         sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (b * (v - vc))
-        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{b(v - v_c)}} = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{{fmt(b)}({money(v)} - {money(vc)})}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{{fmt(b)}({money(v)} - {money(vc)})}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
         
     if v >= 0.5 * vc:
         if Asc_req > 0:
             sv_max = min(0.75 * d, 300, 12 * dia_c)
-            link_str += f"<p>\\( S_{{v,max}} = 0.75d \\text{{, }} 300 \\text{{, or }} 12\\phi_c \\text{{ (whichever is lesser)}} \\)<br/>"
+            link_str += f"<p>For doubly reinforced:<br/>\\( S_{{v,max}} = 0.75d \\text{{, }} 300 \\text{{, or }} 12\\phi_c \\text{{ (whichever is lesser)}} \\)<br/>"
             link_str += f"\\( S_{{v,max}} = 0.75({fmt(d)}) \\text{{, }} 300 \\text{{, or }} 12({fmt(dia_c)}) = {fmt(sv_max)} \\text{{ mm}} \\)</p>"
         else:
             sv_max = min(0.75 * d, 300)
-            link_str += f"<p>\\( S_{{v,max}} = 0.75d \\text{{ or }} 300 \\text{{ (whichever is lesser)}} \\)<br/>"
+            link_str += f"<p>For singly reinforced:<br/>\\( S_{{v,max}} = 0.75d \\text{{ or }} 300 \\text{{ (whichever is lesser)}} \\)<br/>"
             link_str += f"\\( S_{{v,max}} = 0.75({fmt(d)}) \\text{{ or }} 300 = {fmt(sv_max)} \\text{{ mm}} \\)</p>"
         
         sv = min(sv_req, sv_max)

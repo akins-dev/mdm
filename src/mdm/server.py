@@ -303,6 +303,7 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                         "is_support": global_is_support,
                         "highlight_title": "DESIGN FOR MAXIMUM VALUES",
                         "bg_color": "#fffbeb",
+                        "show_position": False,
                         "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
                         "support_cond": support_cond
                     }
@@ -319,7 +320,8 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                         span_length=t.get("span_length_mm", 0.0),
                         support_cond=t.get("support_cond", support_cond),
                         highlight_title=t.get("highlight_title", ""),
-                        bg_color=t.get("bg_color", "")
+                        bg_color=t.get("bg_color", ""),
+                        show_position=t.get("show_position", True)
                     )
                     reports.append(report["html"])
                             
