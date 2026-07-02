@@ -300,6 +300,43 @@ def design_section(
             
         html_lines.append(row(bs8110.REF_MAX_SPACING, spacing_str, spacing_out, spacing_status))
         
+    # Deflection Check
+    if (not is_support or not show_position) and span_length > 0:
+        if support_cond.lower() == "cantilever":
+            basic_span_d = 7
+        elif support_cond.lower() == "simply supported":
+            basic_span_d = 20
+        else:
+            basic_span_d = 26
+            
+        fs = (2.0 / 3.0) * fy * (As_req / area_prov)
+        M_bd2 = (M_abs * 1e6) / (b * d * d)
+        mf_calc = 0.55 + (477.0 - fs) / (120.0 * (0.9 + M_bd2))
+        mf = min(mf_calc, 2.0)
+        
+        allowable_span_d = basic_span_d * mf
+        actual_span_d = span_length / d
+        
+        defl_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Deflection Check ({support_cond})</div><p>"
+        defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
+        defl_str += f"\\( \\frac{{M}}{{bd^2}} = {money(M_bd2)} \\text{{ N/mm}}^2 \\)<br/>"
+        defl_str += f"M.F. = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
+        defl_str += f"Allowable span/d = \\( {basic_span_d} \\times {money(mf)} = {money(allowable_span_d)} \\)<br/>"
+        if not show_position:
+            defl_str += f"Actual span/d (using max span length) = \\( \\frac{{{money(span_length)}}}{{{fmt(d)}}} = {money(actual_span_d)} \\)</p>"
+        else:
+            defl_str += f"Actual span/d = \\( \\frac{{{money(span_length)}}}{{{fmt(d)}}} = {money(actual_span_d)} \\)</p>"
+        
+        if actual_span_d <= allowable_span_d:
+            defl_out = f"Deflection OK<br/>\\( (\\text{{Actual}} \\le \\text{{Allowable}}) \\)"
+            defl_status = "success"
+        else:
+            defl_str += f"<p class='text-danger'><b>WARNING:</b> Actual ratio ({money(actual_span_d)}) &gt; Allowable ({money(allowable_span_d)}).<br/><b>Advise:</b> Increase beam height (h).</p>"
+            defl_out = "EXCEEDS LIMIT"
+            defl_status = "danger"
+            
+        html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out, defl_status))
+        
     # Shear Design
     fyv_eff = min(fyv, 460.0)
     v = V_abs * 1000 / (b * d)
@@ -385,47 +422,24 @@ def design_section(
         link_out = f"Provide 2-legs Y{int(link_dia)}mm bars @ {int(sv)}mm c/c"
         
     html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
-    
-    # Deflection Check
-    if (not is_support or not show_position) and span_length > 0:
-        if support_cond.lower() == "cantilever":
-            basic_span_d = 7
-        elif support_cond.lower() == "simply supported":
-            basic_span_d = 20
-        else:
-            basic_span_d = 26
-            
-        fs = (2.0 / 3.0) * fy * (As_req / area_prov)
-        M_bd2 = (M_abs * 1e6) / (b * d * d)
-        mf_calc = 0.55 + (477.0 - fs) / (120.0 * (0.9 + M_bd2))
-        mf = min(mf_calc, 2.0)
-        
-        allowable_span_d = basic_span_d * mf
-        actual_span_d = span_length / d
-        
-        defl_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Deflection Check ({support_cond})</div><p>"
-        defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
-        defl_str += f"\\( \\frac{{M}}{{bd^2}} = {money(M_bd2)} \\text{{ N/mm}}^2 \\)<br/>"
-        defl_str += f"M.F. = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
-        defl_str += f"Allowable span/d = \\( {basic_span_d} \\times {money(mf)} = {money(allowable_span_d)} \\)<br/>"
-        if not show_position:
-            defl_str += f"Actual span/d (using max span length) = \\( \\frac{{{money(span_length)}}}{{{fmt(d)}}} = {money(actual_span_d)} \\)</p>"
-        else:
-            defl_str += f"Actual span/d = \\( \\frac{{{money(span_length)}}}{{{fmt(d)}}} = {money(actual_span_d)} \\)</p>"
-        
-        if actual_span_d <= allowable_span_d:
-            defl_out = f"Deflection OK<br/>\\( (\\text{{Actual}} \\le \\text{{Allowable}}) \\)"
-            defl_status = "success"
-        else:
-            defl_str += f"<p class='text-danger'><b>WARNING:</b> Actual ratio ({money(actual_span_d)}) &gt; Allowable ({money(allowable_span_d)}).<br/><b>Advise:</b> Increase beam height (h).</p>"
-            defl_out = "EXCEEDS LIMIT"
-            defl_status = "danger"
-            
-        html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out, defl_status))
 
     html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex flex-col items-center'>")
     html_lines.append("<h5 class='text-md font-bold mb-2'>Beam section detailing</h5>")
-    html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support))
+    
+    if not show_position:
+        html_lines.append("<div style='display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem;'>")
+        html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
+        html_lines.append("<h6 class='text-sm font-semibold mb-1'>Span Detailing (Tension Bottom)</h6>")
+        html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, False))
+        html_lines.append("</div>")
+        html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
+        html_lines.append("<h6 class='text-sm font-semibold mb-1'>Support Detailing (Tension Top)</h6>")
+        html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, True))
+        html_lines.append("</div>")
+        html_lines.append("</div>")
+    else:
+        html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support))
+        
     html_lines.append("</div>")
 
     html_lines.append("</div>")
