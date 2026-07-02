@@ -149,7 +149,7 @@ def moment_distribution(
             break
 
     rows.append(["End Moment"] + [money(moments[end]) for end in end_labels])
-    return ["Step"] + end_labels, rows, moments, cycles_used
+    return rows[0], rows[1:], moments, cycles_used
 
 
 def support_moment_rows(
