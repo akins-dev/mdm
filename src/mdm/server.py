@@ -291,25 +291,97 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 all_tasks = span_tasks + support_tasks
                 
                 if all_tasks:
-                    max_moment_task = max(all_tasks, key=lambda t: abs(t["M"]))
-                    global_M = max_moment_task["M"]
-                    global_is_support = max_moment_task["is_support"]
                     global_V = max(t["V"] for t in all_tasks)
                     
-                    envelope_task = {
-                        "name": "Global Envelope (All Spans & Supports)",
-                        "M": global_M,
-                        "V": global_V,
-                        "is_support": global_is_support,
-                        "highlight_title": "DESIGN FOR MAXIMUM VALUES",
-                        "bg_color": "#fffbeb",
-                        "show_position": False,
-                        "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
-                        "support_cond": support_cond
-                    }
-                    all_tasks.insert(0, envelope_task)
+                    pos_tasks = [t for t in all_tasks if t["M"] >= 0]
+                    neg_tasks = [t for t in all_tasks if t["M"] < 0]
+                    
+                    max_pos_task = max(pos_tasks, key=lambda t: t["M"]) if pos_tasks else None
+                    max_neg_task = min(neg_tasks, key=lambda t: t["M"]) if neg_tasks else None
+
+                    envelope_tasks = []
+                    
+                    combined_notes = [
+                        "Top reinforcement is designed using the maximum negative (hogging) moment from the envelope.",
+                        "Bottom reinforcement is designed using the maximum positive (sagging) moment from the envelope.",
+                        "Stirrups are designed using the maximum shear force from the shear envelope.",
+                        "This ensures the beam is safe under all possible loading arrangements, not just one."
+                    ]
+                    
+                    if max_pos_task:
+                        task_pos = {
+                            "name": "Global Envelope - Maximum Positive (Sagging) Moment",
+                            "M": max_pos_task["M"],
+                            "V": global_V,
+                            "is_support": False,
+                            "highlight_title": "DESIGN FOR MAXIMUM SAGGING VALUES",
+                            "bg_color": "#f0fdf4",
+                            "show_position": True,
+                            "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
+                            "support_cond": support_cond,
+                            "notes": None,
+                            "is_envelope": True
+                        }
+                    else:
+                        task_pos = None
+
+                    if max_neg_task:
+                        task_neg = {
+                            "name": "Global Envelope - Maximum Negative (Hogging) Moment",
+                            "M": max_neg_task["M"],
+                            "V": global_V,
+                            "is_support": True,
+                            "highlight_title": "DESIGN FOR MAXIMUM HOGGING VALUES",
+                            "bg_color": "#fffbeb",
+                            "show_position": True,
+                            "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
+                            "support_cond": support_cond,
+                            "notes": None,
+                            "is_envelope": True
+                        }
+                    else:
+                        task_neg = None
+
+                    if task_pos and task_neg:
+                        if abs(task_pos["M"]) >= abs(task_neg["M"]):
+                            task_pos["name"] += " [OVERALL MAX]"
+                            task_pos["highlight_title"] += " [OVERALL MAX]"
+                            task_pos["notes"] = combined_notes
+                            envelope_tasks = [task_pos, task_neg]
+                        else:
+                            task_neg["name"] += " [OVERALL MAX]"
+                            task_neg["highlight_title"] += " [OVERALL MAX]"
+                            task_neg["notes"] = combined_notes
+                            envelope_tasks = [task_neg, task_pos]
+                    elif task_pos:
+                        task_pos["name"] += " [OVERALL MAX]"
+                        task_pos["highlight_title"] += " [OVERALL MAX]"
+                        task_pos["notes"] = combined_notes
+                        envelope_tasks = [task_pos]
+                    elif task_neg:
+                        task_neg["name"] += " [OVERALL MAX]"
+                        task_neg["highlight_title"] += " [OVERALL MAX]"
+                        task_neg["notes"] = combined_notes
+                        envelope_tasks = [task_neg]
+
+                    for env_task in reversed(envelope_tasks):
+                        all_tasks.insert(0, env_task)
+
+                from .design import shear_and_drawing_section
+                
+                env_count = len([t for t in all_tasks if t.get("is_envelope")])
+                processed_envs = 0
+                
+                top_layer_counts, top_dia = [], main_bar_dia
+                top_layer_counts_c, top_dia_c = [], main_bar_dia
+                bot_layer_counts, bot_dia = [], main_bar_dia
+                bot_layer_counts_c, bot_dia_c = [], main_bar_dia
+                env_area_prov = 0.0
+                env_Asc_req = 0.0
+                env_d = 0.0
 
                 for t in all_tasks:
+                    is_env = t.get("is_envelope", False)
                     report = design_section(
                         name=t["name"],
                         M=t["M"],
@@ -318,12 +390,47 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                         fcu=fcu, fy=fy, fyv=fyv, b=b, h=h, cover=cover,
                         main_bar_dia=main_bar_dia, link_dia=link_dia,
                         span_length=t.get("span_length_mm", 0.0),
-                        support_cond=t.get("support_cond", support_cond),
+                        support_cond=t.get("support_cond", "Continuous"),
                         highlight_title=t.get("highlight_title", ""),
                         bg_color=t.get("bg_color", ""),
-                        show_position=t.get("show_position", True)
+                        show_position=True if is_env else t.get("show_position", True),
+                        notes=t.get("notes", None),
+                        skip_shear=is_env,
+                        skip_drawing=is_env
                     )
                     reports.append(report["html"])
+                    
+                    if is_env:
+                        processed_envs += 1
+                        env_d = report["d"]
+                        if t["is_support"]:
+                            top_layer_counts = report["layer_counts"]
+                            top_dia = report["dia"]
+                            top_layer_counts_c = report["layer_counts_c"]
+                            top_dia_c = report["dia_c"]
+                            env_area_prov = max(env_area_prov, report["area_prov"])
+                            env_Asc_req = max(env_Asc_req, report["Asc_req"])
+                        else:
+                            bot_layer_counts = report["layer_counts"]
+                            bot_dia = report["dia"]
+                            bot_layer_counts_c = report["layer_counts_c"]
+                            bot_dia_c = report["dia_c"]
+                            env_area_prov = max(env_area_prov, report["area_prov"])
+                            env_Asc_req = max(env_Asc_req, report["Asc_req"])
+                            
+                        if processed_envs == env_count:
+                            shear_html = shear_and_drawing_section(
+                                name="Global Envelope - Shear & Detailing",
+                                V=global_V, b=b, h=h, d=env_d, cover=cover, fcu=fcu, fyv=fyv,
+                                area_prov=env_area_prov, Asc_req=env_Asc_req, link_dia=link_dia,
+                                top_layer_counts=top_layer_counts, top_dia=top_dia,
+                                top_layer_counts_c=top_layer_counts_c, top_dia_c=top_dia_c,
+                                bot_layer_counts=bot_layer_counts, bot_dia=bot_dia,
+                                bot_layer_counts_c=bot_layer_counts_c, bot_dia_c=bot_dia_c,
+                                highlight_title="GLOBAL SHEAR & DETAILING",
+                                bg_color="#f8fafc"
+                            )
+                            reports.append(shear_html)
                             
                 self.send_json(200, {"reports": reports})
             except Exception as error:

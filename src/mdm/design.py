@@ -107,7 +107,10 @@ def design_section(
     support_cond: str = "Continuous",
     highlight_title: str = "",
     bg_color: str = "",
-    show_position: bool = True
+    show_position: bool = True,
+    notes: list = None,
+    skip_shear: bool = False,
+    skip_drawing: bool = False
 ) -> Dict[str, Any]:
     
     style_attr = f" style='background-color: {bg_color}; border-color: #f59e0b; border-width: 2px;'" if bg_color else ""
@@ -120,6 +123,16 @@ def design_section(
         
     html_lines.append(f"<h4>{header_text}</h4>")
     html_lines.append("<p class='text-sm text-gray-600 mb-2'><b>Note:</b> Section designed strictly as a Rectangular Beam (per Oyenuga). Partial safety factor for steel \\(\\gamma_m = 1.05\\), hence using \\(0.95 f_y\\) instead of \\(0.87 f_y\\).</p>")
+    
+    if notes:
+        html_lines.append("<div class='mb-4 p-3' style='background-color: #000; color: #fff; border-radius: 4px; font-size: 0.9em;'>")
+        html_lines.append("<div style='font-weight: bold; margin-bottom: 8px;'>When designing reinforcement:</div>")
+        html_lines.append("<ul style='list-style-type: disc; padding-left: 20px; margin-bottom: 8px;'>")
+        for note in notes[:-1]:
+            html_lines.append(f"<li>{note}</li>")
+        html_lines.append("</ul>")
+        html_lines.append(f"<p style='margin: 0;'>{notes[-1]}</p>")
+        html_lines.append("</div>")
     
     M_abs = abs(M)
     V_abs = abs(V)
@@ -337,6 +350,160 @@ def design_section(
             
         html_lines.append(row(bs8110.REF_DEFLECTION_BASIC, defl_str, defl_out, defl_status))
         
+    if not skip_shear:
+        # Shear Design
+        fyv_eff = min(fyv, 460.0)
+        v = V_abs * 1000 / (b * d)
+        shear_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Shear Design</div><p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
+        
+        v_max_calc = 0.8 * math.sqrt(fcu)
+        v_max = min(v_max_calc, 5.0)
+        shear_str += f"<p>\\( v_{{max}} = 0.8\\sqrt{{f_{{cu}}}} \\) or 5, whichever is lesser.<br/>"
+        shear_str += f"\\( v_{{max}} = 0.8\\sqrt{{{fmt(fcu)}}} \\) or 5 = \\( {money(v_max)} \\text{{ N/mm}}^2 \\)</p>"
+        
+        if v > v_max:
+            shear_str += f"<p class='text-danger'><b>WARNING:</b> \\( v = {money(v)} > v_{{max}} = {money(v_max)} \\text{{ N/mm}}^2 \\). Section Inadequate.<br/><b>Advise:</b> Increase beam width (b), beam height (h), or both.</p>"
+            shear_out = "SECTION INADEQUATE"
+            shear_status = "danger"
+        else:
+            shear_out = f"\\( (v \\le v_{{max}}) \\)<br/>Section OK"
+            shear_status = "success"
+            
+        html_lines.append(row(bs8110.REF_MAX_SHEAR, shear_str, shear_out, shear_status))
+            
+        percent_As = (100 * area_prov) / (b * d)
+        percent_As_eff = min(max(percent_As, 0.15), 3.0)
+        fcu_for_vc = min(fcu, 40.0)
+        
+        f_depth = max(math.pow(400.0 / d, 0.25), 1.0)
+        vc = 0.79 * math.pow(percent_As_eff, 1.0/3.0) * f_depth / 1.25 * math.pow(fcu_for_vc/25.0, 1.0/3.0)
+        
+        vc_str = f"<p>\\( \\frac{{100A_s}}{{bd}} = {money(percent_As)}\\% \\)<br/>"
+        vc_str += f"Depth factor \\( (400/d)^{{1/4}} = {money(f_depth)} \\)<br/>"
+        vc_str += f"\\( v_c = {money(vc)} \\text{{ N/mm}}^2 \\)</p>"
+        
+        html_lines.append(row(bs8110.REF_SHEAR_CAPACITY, vc_str, f"\\( v_c = {money(vc)} \\text{{ N/mm}}^2 \\)"))
+        
+        if v < 0.5 * vc:
+            req_str = f"<b>Condition satisfied:</b> \\( v < 0.5v_c \\)<br/>\\( {money(v)} < {money(0.5*vc)} \\)"
+            req_out = "Shear reinforcement<br/>not required"
+        elif v <= vc + 0.4:
+            req_str = f"<b>Condition satisfied:</b> \\( 0.5v_c < v \\le (v_c + 0.4) \\)<br/>\\( {money(0.5*vc)} < {money(v)} \\le {money(vc+0.4)} \\)"
+            req_out = "Shear reinforcement<br/>required"
+        else:
+            req_str = f"<b>Condition satisfied:</b> \\( (v_c + 0.4) < v \\)<br/>\\( {money(vc+0.4)} < {money(v)} \\)"
+            req_out = "Shear reinforcement<br/>required"
+            
+        html_lines.append(row("Table 3.7", req_str, req_out, "success"))
+        
+        asv_single = get_bar_area(link_dia)
+        asv = 2 * asv_single
+        
+        asv_str = f"\\( A_{{sv}} \\) (2-legged stirrup) = \\( 2 \\times \\text{{Area of }}\\phi_v \\)<br/>"
+        asv_str += f"\\( A_{{sv}} = 2 \\times {fmt(asv_single)} = {fmt(asv)} \\text{{ mm}}^2 \\)<br/>"
+        
+        link_str = ""
+        link_out = ""
+        
+        if v < 0.5 * vc:
+            link_str += f"<p>Shear reinforcement is not required.</p>"
+            link_out = "None Required"
+        elif v <= vc + 0.4:
+            link_str += f"<p>\\( A_{{sv}} \\ge \\frac{{0.4b S_v}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
+            link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{0.4b}} \\)<br/>"
+            link_str += asv_str
+            sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (0.4 * b)
+            link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{0.4 \\times {fmt(b)}}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+        else:
+            link_str += f"<p>\\( A_{{sv}} \\ge \\frac{{b S_v (v - v_c)}}{{0.95 f_{{yv}}}} \\implies \\)<br/>"
+            link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} A_{{sv}} f_{{yv}}}}{{b(v - v_c)}} \\)<br/>"
+            link_str += asv_str
+            sv_req = bs8110.PARTIAL_SAFETY_STEEL * fyv_eff * asv / (b * (v - vc))
+            link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{{fmt(b)}({money(v)} - {money(vc)})}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
+            
+        if v >= 0.5 * vc:
+            if Asc_req > 0:
+                sv_max = min(0.75 * d, 300, 12 * dia_c)
+                link_str += f"<p>For doubly reinforced:<br/>\\( S_{{v,max}} = 0.75d \\text{{, }} 300 \\text{{, or }} 12\\phi_c \\text{{ (whichever is lesser)}} \\)<br/>"
+                link_str += f"\\( S_{{v,max}} = 0.75({fmt(d)}) \\text{{, }} 300 \\text{{, or }} 12({fmt(dia_c)}) = {fmt(sv_max)} \\text{{ mm}} \\)</p>"
+            else:
+                sv_max = min(0.75 * d, 300)
+                link_str += f"<p>For singly reinforced:<br/>\\( S_{{v,max}} = 0.75d \\text{{ or }} 300 \\text{{ (whichever is lesser)}} \\)<br/>"
+                link_str += f"\\( S_{{v,max}} = 0.75({fmt(d)}) \\text{{ or }} 300 = {fmt(sv_max)} \\text{{ mm}} \\)</p>"
+            
+            sv = min(sv_req, sv_max)
+            sv = math.floor(sv / 25.0) * 25.0
+            link_out = f"Provide 2-legs Y{int(link_dia)}mm bars @ {int(sv)}mm c/c"
+            
+        html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
+
+    if not skip_drawing:
+        html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex flex-col items-center'>")
+        html_lines.append("<h5 class='text-md font-bold mb-2'>Beam section detailing</h5>")
+        
+        if not show_position:
+            html_lines.append("<div style='display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem;'>")
+            html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
+            html_lines.append("<h6 class='text-sm font-semibold mb-1'>Span Detailing (Tension Bottom)</h6>")
+            html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, False))
+            html_lines.append("</div>")
+            html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
+            html_lines.append("<h6 class='text-sm font-semibold mb-1'>Support Detailing (Tension Top)</h6>")
+            html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, True))
+            html_lines.append("</div>")
+            html_lines.append("</div>")
+        else:
+            html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support))
+            
+        html_lines.append("</div>")
+
+    html_lines.append("</div>")
+    
+    return {
+        "html": "".join(html_lines),
+        "area_prov": area_prov,
+        "Asc_req": Asc_req if 'Asc_req' in locals() else 0,
+        "layer_counts": layer_counts,
+        "dia": dia,
+        "layer_counts_c": layer_counts_c,
+        "dia_c": dia_c,
+        "d": d
+    }
+
+def shear_and_drawing_section(
+    name: str,
+    V: float,
+    b: float,
+    h: float,
+    d: float,
+    cover: float,
+    fcu: float,
+    fyv: float,
+    area_prov: float,
+    Asc_req: float,
+    link_dia: float,
+    top_layer_counts: list,
+    top_dia: float,
+    top_layer_counts_c: list,
+    top_dia_c: float,
+    bot_layer_counts: list,
+    bot_dia: float,
+    bot_layer_counts_c: list,
+    bot_dia_c: float,
+    highlight_title: str = "",
+    bg_color: str = ""
+) -> str:
+    style_attr = f" style='background-color: {bg_color}; border-color: #f59e0b; border-width: 2px;'" if bg_color else ""
+    html_lines = [f"<div class='calc-sheet'{style_attr}>"]
+    
+    header_text = f"Design for {name}"
+    if highlight_title:
+        header_text += f" - <span style='background-color: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;'>{highlight_title}</span>"
+        
+    html_lines.append(f"<h4>{header_text}</h4>")
+    
+    V_abs = abs(V)
+    
     # Shear Design
     fyv_eff = min(fyv, 460.0)
     v = V_abs * 1000 / (b * d)
@@ -408,6 +575,7 @@ def design_section(
         link_str += f"\\( S_v = \\frac{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(asv)} \\times {fmt(fyv_eff)}}}{{{fmt(b)}({money(v)} - {money(vc)})}} = {money(sv_req)} \\text{{ mm}} \\)</p>"
         
     if v >= 0.5 * vc:
+        dia_c = max(top_dia, bot_dia)
         if Asc_req > 0:
             sv_max = min(0.75 * d, 300, 12 * dia_c)
             link_str += f"<p>For doubly reinforced:<br/>\\( S_{{v,max}} = 0.75d \\text{{, }} 300 \\text{{, or }} 12\\phi_c \\text{{ (whichever is lesser)}} \\)<br/>"
@@ -424,26 +592,23 @@ def design_section(
     html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
 
     html_lines.append("<div class='section-drawing mt-4 border-t border-gray-200 pt-4 flex flex-col items-center'>")
-    html_lines.append("<h5 class='text-md font-bold mb-2'>Beam section detailing</h5>")
+    html_lines.append("<h5 class='text-md font-bold mb-2'>Beam section detailing (Maximum Moment Envelope)</h5>")
     
-    if not show_position:
-        html_lines.append("<div style='display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem;'>")
-        html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
-        html_lines.append("<h6 class='text-sm font-semibold mb-1'>Span Detailing (Tension Bottom)</h6>")
-        html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, False))
-        html_lines.append("</div>")
-        html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
-        html_lines.append("<h6 class='text-sm font-semibold mb-1'>Support Detailing (Tension Top)</h6>")
-        html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, True))
-        html_lines.append("</div>")
-        html_lines.append("</div>")
-    else:
-        html_lines.append(draw_section_svg(b, h, cover, link_dia, layer_counts, dia, layer_counts_c, dia_c, is_support))
-        
-    html_lines.append("</div>")
-
+    html_lines.append("<div style='display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem;'>")
+    
+    # Span detailing: Tension is bot_layer_counts (bottom), Compression is bot_layer_counts_c (top)
+    html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
+    html_lines.append("<h6 class='text-sm font-semibold mb-1'>Span Detailing (Tension Bottom)</h6>")
+    html_lines.append(draw_section_svg(b, h, cover, link_dia, bot_layer_counts, bot_dia, bot_layer_counts_c, bot_dia_c, False))
     html_lines.append("</div>")
     
-    return {
-        "html": "".join(html_lines)
-    }
+    # Support detailing: Tension is top_layer_counts (top), Compression is top_layer_counts_c (bottom)
+    html_lines.append("<div style='display: flex; flex-direction: column; align-items: center;'>")
+    html_lines.append("<h6 class='text-sm font-semibold mb-1'>Support Detailing (Tension Top)</h6>")
+    html_lines.append(draw_section_svg(b, h, cover, link_dia, top_layer_counts, top_dia, top_layer_counts_c, top_dia_c, True))
+    html_lines.append("</div>")
+    
+    html_lines.append("</div>")
+    html_lines.append("</div>")
+    
+    return "".join(html_lines)
