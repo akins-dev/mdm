@@ -155,10 +155,12 @@ def design_section(
     
     # 2. Ultimate Moment of Resistance
     Mu = bs8110.K_PRIME * fcu * b * (d ** 2) / 1e6
+    comp_msg = "<b>Compression reinforcement<br/>not required</b>" if M_abs <= Mu else "<b>Compression reinforcement<br/>required</b>"
+    reinforcement_type_str = "<b>Singly Reinforced</b> \\( (M \\le M_u) \\)" if M_abs <= Mu else "<b>Doubly Reinforced</b> \\( (M > M_u) \\)"
     html_lines.append(row(
         bs8110.REF_ULTIMATE_MOMENT,
-        f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Moment Calculation</div><p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p>",
-        f"\\( M_u = {money(Mu)} \\text{{ kNm}} \\)"
+        f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Flexural Design</div><p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p><p>{reinforcement_type_str}</p>",
+        f"\\( M_u = {money(Mu)} \\text{{ kNm}} \\)<br/><br/>{comp_msg}"
     ))
     
     # Check if compression reinforcement is required
@@ -179,7 +181,7 @@ def design_section(
         z_val = d * (0.5 + math.sqrt(abs(0.25 - K / 0.9)))
         z = min(z_val, 0.95 * d)
         
-        calc_str = f"<p><b>Singly Reinforced</b> \\( (M \\le M_u) \\)<br/>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>"
+        calc_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Neutral Axis check</div><p>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>"
         calc_str += f"\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)<br/>"
         calc_str += f"\\( z \\le 0.95d \\Rightarrow z \\le {money(0.95 * d)} \\text{{ mm}} \\)<br/>"
         
@@ -194,7 +196,7 @@ def design_section(
         html_lines.append(row(
             bs8110.REF_ULTIMATE_MOMENT,
             calc_str,
-            f"Compression reinforcement not required<br/>\\( z = {money(z)} \\text{{ mm}} \\)<br/>\\( A_s = {money(As_req)} \\text{{ mm}}^2 \\)"
+            f"\\( z = {money(z)} \\text{{ mm}} \\)<br/>\\( A_s = {money(As_req)} \\text{{ mm}}^2 \\)"
         ))
         
     else:
@@ -202,7 +204,7 @@ def design_section(
         x = (d - z) / 0.45
         d_prime_over_x = d_prime / x
         
-        calc_str = f"<p><b>Doubly Reinforced</b> \\( (M > M_u) \\)<br/>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K'}}{{0.9}}}} \\right] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
+        calc_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Neutral Axis check</div><p>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K'}}{{0.9}}}} \\right] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
         
         calc_str += f"<p>\\( d'/x = {money(d_prime_over_x)} \\). "
         if d_prime_over_x <= bs8110.LIMIT_D_PRIME_X:
@@ -334,6 +336,7 @@ def design_section(
         defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"\\( \\frac{{M}}{{bd^2}} = {money(M_bd2)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"M.F. = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
+        defl_str += f"Basic span ratio = {basic_span_d}<br/>"
         defl_str += f"Allowable span/d = \\( {basic_span_d} \\times {money(mf)} = {money(allowable_span_d)} \\)<br/>"
         if not show_position:
             defl_str += f"Actual span/d (using max span length) = \\( \\frac{{{money(span_length)}}}{{{fmt(d)}}} = {money(actual_span_d)} \\)</p>"
