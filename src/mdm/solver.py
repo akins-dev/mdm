@@ -165,11 +165,12 @@ def support_moment_rows(
 
 
 def total_span_load(span: Span) -> float:
-    return span.udl * span.length + sum(load for load, _distance in span.point_loads)
+    return sum(w * (b - a) for w, a, b in span.udls) + sum(load for load, _distance in span.point_loads)
 
 
 def load_moment_about_left(span: Span) -> float:
-    return span.udl * span.length * (span.length / 2.0) + sum(load * distance for load, distance in span.point_loads)
+    udl_moment = sum(w * (b - a) * (a + b) / 2.0 for w, a, b in span.udls)
+    return udl_moment + sum(load * distance for load, distance in span.point_loads)
 
 
 def span_reactions(span: Span, final_moments: Dict[str, float]) -> Tuple[float, float]:
@@ -183,7 +184,14 @@ def span_reactions(span: Span, final_moments: Dict[str, float]) -> Tuple[float, 
 
 
 def shear_at(span: Span, left_reaction: float, x: float, after_point_loads: bool = True) -> float:
-    shear = left_reaction - span.udl * x
+    shear = left_reaction
+    for w, a, b in span.udls:
+        if x <= a:
+            pass  # UDL hasn't started yet
+        elif x <= b:
+            shear -= w * (x - a)
+        else:
+            shear -= w * (b - a)
     for load, distance in span.point_loads:
         if distance < x or (after_point_loads and math.isclose(distance, x, abs_tol=1e-9)):
             shear -= load
@@ -191,7 +199,14 @@ def shear_at(span: Span, left_reaction: float, x: float, after_point_loads: bool
 
 
 def moment_at(span: Span, final_moments: Dict[str, float], left_reaction: float, x: float) -> float:
-    moment = final_moments[span.left_end] + left_reaction * x - (span.udl * x**2) / 2.0
+    moment = final_moments[span.left_end] + left_reaction * x
+    for w, a, b in span.udls:
+        if x <= a:
+            pass
+        elif x <= b:
+            moment -= w * (x - a)**2 / 2.0
+        else:
+            moment -= w * (b - a) * (x - (a + b) / 2.0)
     for load, distance in span.point_loads:
         if x >= distance:
             moment -= load * (x - distance)
@@ -202,14 +217,42 @@ def span_station_candidates(span: Span, final_moments: Dict[str, float], left_re
     candidates = {0.0, span.length}
     for _load, distance in span.point_loads:
         candidates.add(distance)
+    for _w, a, b in span.udls:
+        if 0.0 < a < span.length:
+            candidates.add(a)
+        if 0.0 < b < span.length:
+            candidates.add(b)
 
-    breakpoints = [0.0] + sorted({distance for _load, distance in span.point_loads if 0.0 < distance < span.length}) + [span.length]
-    for start, end in zip(breakpoints, breakpoints[1:]):
-        shear_start = shear_at(span, left_reaction, start, after_point_loads=True)
-        if span.udl and start <= shear_start / span.udl + start <= end:
-            root = start + shear_start / span.udl
-            if 0.0 <= root <= span.length:
+    # Build breakpoints from point loads AND UDL boundaries
+    breakpoint_set = set()
+    for _load, distance in span.point_loads:
+        if 0.0 < distance < span.length:
+            breakpoint_set.add(distance)
+    for _w, a, b in span.udls:
+        if 0.0 < a < span.length:
+            breakpoint_set.add(a)
+        if 0.0 < b < span.length:
+            breakpoint_set.add(b)
+    breakpoints = [0.0] + sorted(breakpoint_set) + [span.length]
+
+    for seg_start, seg_end in zip(breakpoints, breakpoints[1:]):
+        v_start = shear_at(span, left_reaction, seg_start, after_point_loads=True)
+        v_end = shear_at(span, left_reaction, seg_end, after_point_loads=False)
+        # Find which UDL (if any) is active in this segment
+        active_w = 0.0
+        for w, a, b in span.udls:
+            mid = (seg_start + seg_end) / 2.0
+            if a <= mid <= b:
+                active_w += w
+        if active_w > 0 and v_start * v_end <= 0 and not math.isclose(v_start, 0.0, abs_tol=1e-9):
+            # Zero-shear root: v_start - active_w * (root - seg_start) = 0
+            root = seg_start + v_start / active_w
+            if seg_start < root < seg_end and 0.0 <= root <= span.length:
                 candidates.add(root)
+        elif active_w == 0 and v_start * v_end < 0:
+            # No UDL in segment, linear interpolation between point loads
+            # Shear is constant so no root (sign change is at a point load)
+            pass
 
     return sorted(candidates)
 
@@ -322,14 +365,17 @@ def analysis_from_final_moments(
             extrema_rows.append([span.name, money(l_val), money(shear), money(moment)])
             
             if 0.0 < l_val < span.length and not any(math.isclose(l_val, pt[1], abs_tol=1e-6) for pt in span.point_loads):
-                if math.isclose(shear_at(span, left_reaction, l_val), 0.0, abs_tol=1e-6) and span.udl > 0:
-                    start_val = max([0.0] + [pt[1] for pt in span.point_loads if pt[1] < l_val])
+                if math.isclose(shear_at(span, left_reaction, l_val), 0.0, abs_tol=1e-6) and span.udls:
+                    start_val = max([0.0] + [pt[1] for pt in span.point_loads if pt[1] < l_val]
+                                    + [a for _w, a, _b in span.udls if a < l_val])
                     shear_start = shear_at(span, left_reaction, start_val, after_point_loads=True)
+                    # Find the active UDL intensity at this zero-shear point
+                    active_w = sum(w for w, a, b in span.udls if a <= l_val <= b)
                     zero_shear_calcs.append({
                         "span": span.name,
                         "start": start_val,
                         "v_start": shear_start,
-                        "udl": span.udl,
+                        "udl": active_w,
                         "root": l_val
                     })
 
@@ -342,21 +388,49 @@ def analysis_from_final_moments(
             if abs(shear) > abs(max_shear["value"]):
                 max_shear = {"span": span.name, "x": x, "value": shear}
 
+        # Build shear equation display
+        total_udl_w = sum(w for w, a, b in span.udls if span._is_full_span_udl(a, b))
+        has_partial = any(not span._is_full_span_udl(a, b) for w, a, b in span.udls)
+        if has_partial:
+            udl_term_generic = "-\\Sigma w_i(l-a_i)"
+            udl_parts = []
+            for w, a, b in span.udls:
+                if span._is_full_span_udl(a, b):
+                    udl_parts.append(f"{money(w)}l")
+                else:
+                    udl_parts.append(f"{money(w)}(l-{fmt(a)})" if a > 0 else f"{money(w)}l")
+            udl_term_specific = "-" + "-".join(udl_parts) if udl_parts else ""
+        elif total_udl_w > 0:
+            udl_term_generic = "-wl"
+            udl_term_specific = f"-{money(total_udl_w)}l"
+        else:
+            udl_term_generic = ""
+            udl_term_specific = ""
+
         shear_calc_rows.append(
             [
                 span.name,
-                "\\(V(l)=R_L-wl-\\Sigma P_{a\\le l}\\)",
-                f"\\(V(l)={money(left_reaction)}-{money(span.udl)}l-\\Sigma P\\)",
+                f"\\(V(l)=R_L{udl_term_generic}-\\Sigma P_{{a\\le l}}\\)",
+                f"\\(V(l)={money(left_reaction)}{udl_term_specific}-\\Sigma P\\)",
             ]
         )
         for l_val in station_candidates:
             point_load_sum = sum(load for load, distance in span.point_loads if distance <= l_val)
             l_str = f"\\frac{{{money(span.length)}}}{{2}}" if math.isclose(l_val, span.length / 2, abs_tol=1e-6) else money(l_val)
+            # Calculate UDL contribution at this station
+            udl_contrib = 0.0
+            for w, a, b in span.udls:
+                if l_val <= a:
+                    pass
+                elif l_val <= b:
+                    udl_contrib += w * (l_val - a)
+                else:
+                    udl_contrib += w * (b - a)
             shear_calc_rows.append(
                 [
                     f"{span.name} at l={l_str}",
-                    "\\(V=R_L-wl-\\Sigma P\\)",
-                    f"\\({money(left_reaction)}-{money(span.udl)}({l_str})-{money(point_load_sum)}={money(shear_at(span, left_reaction, l_val))}\\)",
+                    "\\(V=R_L-\\Sigma w-\\Sigma P\\)",
+                    f"\\({money(left_reaction)}-{money(udl_contrib)}-{money(point_load_sum)}={money(shear_at(span, left_reaction, l_val))}\\)",
                 ]
             )
         bending_calc_rows.append(
@@ -393,7 +467,7 @@ def analysis_from_final_moments(
             l_str = f"\\frac{{{money(span.length)}}}{{2}}" if math.isclose(l_val, span.length / 2, abs_tol=1e-6) else money(l_val)
             prev_l_str = f"\\frac{{{money(span.length)}}}{{2}}" if math.isclose(prev_l, span.length / 2, abs_tol=1e-6) else money(prev_l)
             
-            if span.udl == 0 and math.isclose(v_start, v_end, abs_tol=1e-6):
+            if not span.udls and math.isclose(v_start, v_end, abs_tol=1e-6):
                 area_term = f"{money(v_start)}({dl_str})"
             else:
                 area_term = f"\\frac{{1}}{{2}}({money(v_start)} + {money(v_end)})({dl_str})"
@@ -421,7 +495,7 @@ def analysis_from_final_moments(
                 "length": span.length,
                 "start": span_start,
                 "end": global_x,
-                "udl": span.udl,
+                "udls": [{"w": w, "a": a, "b": b} for w, a, b in span.udls],
                 "point_loads": [{"load": load, "distance": distance} for load, distance in span.point_loads],
                 "left_reaction": left_reaction,
                 "right_reaction": right_reaction,

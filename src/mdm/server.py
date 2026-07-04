@@ -51,6 +51,56 @@ def parse_point_loads(raw: object, length: float, span_name: str) -> List[Tuple[
     return loads
 
 
+def parse_udls(raw: object, length: float, span_name: str) -> List[Tuple[float, float, float]]:
+    """Parse UDL string. Supports:
+    - Plain number: '15' (full-span UDL, equivalent to 15@0-L)
+    - Partial UDLs: '15@0-3; 20@4-6'
+    Returns list of (w, start, end) tuples.
+    """
+    text = str(raw or "").strip()
+    if not text or text == "0":
+        return []
+
+    udls: List[Tuple[float, float, float]] = []
+    for part in text.split(";"):
+        item = part.strip()
+        if not item:
+            continue
+        if "@" in item:
+            w_text, range_text = item.split("@", 1)
+            if "-" not in range_text:
+                raise ValueError(f"UDL '{item}' on span {span_name} must use w@start-end format.")
+            start_text, end_text = range_text.split("-", 1)
+            w = parse_float(w_text, f"UDL intensity on span {span_name}")
+            start = parse_float(start_text, f"UDL start position on span {span_name}")
+            end = parse_float(end_text, f"UDL end position on span {span_name}")
+        else:
+            w = parse_float(item, f"UDL intensity on span {span_name}")
+            start = 0.0
+            end = length
+
+        if w < 0:
+            raise ValueError(f"UDL intensity on span {span_name} cannot be negative.")
+        if w == 0:
+            continue
+        if start < 0 or end > length + 1e-9:
+            raise ValueError(f"UDL range on span {span_name} must be within 0 and {fmt(length)}.")
+        if start >= end:
+            raise ValueError(f"UDL start must be less than end on span {span_name}.")
+        udls.append((w, start, min(end, length)))
+
+    # Sort by start position and check for overlaps
+    udls.sort(key=lambda x: x[1])
+    for i in range(len(udls) - 1):
+        if udls[i][2] > udls[i + 1][1] + 1e-9:
+            raise ValueError(
+                f"Overlapping UDLs on span {span_name}: "
+                f"{fmt(udls[i][0])}@{fmt(udls[i][1])}-{fmt(udls[i][2])} overlaps with "
+                f"{fmt(udls[i+1][0])}@{fmt(udls[i+1][1])}-{fmt(udls[i+1][2])}."
+            )
+    return udls
+
+
 def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
     support_count = int(parse_float(payload.get("support_count", ""), "Number of supports"))
     if support_count < 2:
@@ -78,11 +128,9 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
         length = parse_float(span_payload.get("length", ""), f"Length for span {span_name}")
         if length <= 0:
             raise ValueError(f"Length for span {span_name} must be greater than 0.")
-        udl = parse_float(span_payload.get("udl", "0") or "0", f"UDL for span {span_name}")
-        if udl < 0:
-            raise ValueError(f"UDL for span {span_name} cannot be negative.")
+        udls = parse_udls(span_payload.get("udls", span_payload.get("udl", "0")), length, span_name)
         point_loads = parse_point_loads(span_payload.get("point_loads", ""), length, span_name)
-        spans.append(Span(left=left, right=right, length=length, udl=udl, point_loads=point_loads))
+        spans.append(Span(left=left, right=right, length=length, udls=udls, point_loads=point_loads))
 
     fixed_supports = {supports[0], supports[-1]} if bool(payload.get("exterior_fixed", True)) else set()
     distribution_rows, distribution_factors, joint_ends, opposite = build_standard_distribution_rows(

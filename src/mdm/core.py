@@ -8,7 +8,7 @@ class Span:
     left: str
     right: str
     length: float
-    udl: float = 0.0
+    udls: List[Tuple[float, float, float]] = field(default_factory=list)
     point_loads: List[Tuple[float, float]] = field(default_factory=list)
 
     @property
@@ -28,9 +28,23 @@ class Span:
         return f"{self.right}{self.left}"
 
     def fixed_end_moments(self) -> Tuple[float, float]:
-        """Return fixed-end moments (left end, right end)."""
-        fem_left = -(self.udl * self.length**2) / 12.0
-        fem_right = (self.udl * self.length**2) / 12.0
+        """Return fixed-end moments (left end, right end).
+        
+        For a partial UDL of intensity w from position a to b on a span of length L:
+          M_L = -(w / L^2) * [ (L/3)(b^3 - a^3) - (1/4)(b^4 - a^4) ]
+          M_R =  (w / L^2) * [ (1/4)(b^4 - a^4) - (a/3)(b^3 - a^3) ]
+        
+        For a full-span UDL (a=0, b=L), these reduce to -wL^2/12 and +wL^2/12.
+        """
+        L = self.length
+        fem_left = 0.0
+        fem_right = 0.0
+
+        for w, a, b in self.udls:
+            b3_a3 = b**3 - a**3
+            b4_a4 = b**4 - a**4
+            fem_left += -(w / L**2) * (L * b3_a3 / 3.0 - b4_a4 / 4.0)
+            fem_right += (w / L**2) * (b4_a4 / 4.0 - a * b3_a3 / 3.0)
 
         for load, a in self.point_loads:
             b = self.length - a
@@ -39,37 +53,74 @@ class Span:
 
         return fem_left, fem_right
 
+    def _is_full_span_udl(self, a: float, b: float) -> bool:
+        """Check if a UDL covers the entire span."""
+        return math.isclose(a, 0.0, abs_tol=1e-9) and math.isclose(b, self.length, abs_tol=1e-9)
+
     def fixed_end_detail_rows(self) -> List[List[Any]]:
         rows: List[List[Any]] = []
-        base_rows = (2 if self.udl else 0) + 2 * len(self.point_loads)
+        base_rows = 2 * len(self.udls) + 2 * len(self.point_loads)
         total_rows = 2 if base_rows == 0 else (base_rows + (2 if base_rows > 2 else 0))
         
         span_val = {"value": self.name, "rowspan": total_rows}
+        L = self.length
 
-        if self.udl:
-            left_value = -(self.udl * self.length**2) / 12.0
-            right_value = (self.udl * self.length**2) / 12.0
-            rows.append(
-                [
-                    span_val,
-                    {"value": "UDL", "rowspan": 2},
-                    self.left_end,
-                    "\\(-wL^2/12\\)",
-                    f"\\(-({fmt(self.udl)} \\times {fmt(self.length)}^2) / 12\\)",
-                    money(left_value),
-                ]
-            )
-            span_val = None
-            rows.append(
-                [
-                    span_val,
-                    None,
-                    self.right_end,
-                    "\\(wL^2/12\\)",
-                    f"\\(({fmt(self.udl)} \\times {fmt(self.length)}^2) / 12\\)",
-                    money(right_value),
-                ]
-            )
+        for udl_idx, (w, a, b) in enumerate(self.udls, start=1):
+            if self._is_full_span_udl(a, b):
+                # Full-span UDL — use the simple wL²/12 display
+                left_value = -(w * L**2) / 12.0
+                right_value = (w * L**2) / 12.0
+                label = "UDL" if len(self.udls) == 1 else f"UDL {udl_idx}"
+                rows.append(
+                    [
+                        span_val,
+                        {"value": label, "rowspan": 2},
+                        self.left_end,
+                        "\\(-wL^2/12\\)",
+                        f"\\(-({fmt(w)} \\times {fmt(L)}^2) / 12\\)",
+                        money(left_value),
+                    ]
+                )
+                span_val = None
+                rows.append(
+                    [
+                        span_val,
+                        None,
+                        self.right_end,
+                        "\\(wL^2/12\\)",
+                        f"\\(({fmt(w)} \\times {fmt(L)}^2) / 12\\)",
+                        money(right_value),
+                    ]
+                )
+            else:
+                # Partial UDL — use the general formula display
+                b3_a3 = b**3 - a**3
+                b4_a4 = b**4 - a**4
+                left_value = -(w / L**2) * (L * b3_a3 / 3.0 - b4_a4 / 4.0)
+                right_value = (w / L**2) * (b4_a4 / 4.0 - a * b3_a3 / 3.0)
+                label = f"UDL {udl_idx}" if len(self.udls) > 1 else "UDL"
+                range_str = f"({fmt(a)}m–{fmt(b)}m)"
+                rows.append(
+                    [
+                        span_val,
+                        {"value": f"{label} {range_str}", "rowspan": 2},
+                        self.left_end,
+                        "\\(-\\frac{w}{L^2}[\\frac{L}{3}(b^3-a^3)-\\frac{1}{4}(b^4-a^4)]\\)",
+                        f"\\(-\\frac{{{fmt(w)}}}{{{fmt(L)}}}^2[\\frac{{{fmt(L)}}}{{3}}({fmt(b)}^3-{fmt(a)}^3)-\\frac{{1}}{{4}}({fmt(b)}^4-{fmt(a)}^4)]\\)",
+                        money(left_value),
+                    ]
+                )
+                span_val = None
+                rows.append(
+                    [
+                        span_val,
+                        None,
+                        self.right_end,
+                        "\\(\\frac{w}{L^2}[\\frac{1}{4}(b^4-a^4)-\\frac{a}{3}(b^3-a^3)]\\)",
+                        f"\\(\\frac{{{fmt(w)}}}{{{fmt(L)}}}^2[\\frac{{1}}{{4}}({fmt(b)}^4-{fmt(a)}^4)-\\frac{{{fmt(a)}}}{{3}}({fmt(b)}^3-{fmt(a)}^3)]\\)",
+                        money(right_value),
+                    ]
+                )
 
         for index, (load, a) in enumerate(self.point_loads, start=1):
             b = self.length - a

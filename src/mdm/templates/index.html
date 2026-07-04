@@ -308,6 +308,7 @@
       </div>
       <div class="span-list">
         <h2>Spans</h2>
+        <p class="formula">UDLs use <strong>w@start-end</strong>, where <strong>start</strong> and <strong>end</strong> are distances from the left support. For a full-span UDL, simply enter the value (e.g. <strong>15</strong>). Separate multiple UDLs with semicolons.</p>
         <p class="formula">Point loads use <strong>P@a</strong>, where <strong>a</strong> is the distance from the left support. Separate multiple point loads with semicolons.</p>
         <div id="spans"></div>
       </div>
@@ -414,7 +415,7 @@
       const count = Number(supportCount.value);
       const old = new Map([...spansEl.querySelectorAll('.span-row')].map(row => [row.dataset.span, {
         length: row.querySelector('.length').value,
-        udl: row.querySelector('.udl').value,
+        udls: row.querySelector('.udl').value,
         pointLoads: row.querySelector('.point-loads').value
       }]));
       spansEl.innerHTML = '';
@@ -423,7 +424,7 @@
         const left = supportName(i);
         const right = supportName(i + 1);
         const name = `${left}${right}`;
-        const previous = old.get(name) || { length: '', udl: '0', pointLoads: '' };
+        const previous = old.get(name) || { length: '', udls: '', pointLoads: '' };
         const row = document.createElement('div');
         row.className = 'span-row';
         row.dataset.span = name;
@@ -434,8 +435,8 @@
             <input class="length" type="text" value="${escapeAttr(previous.length)}">
           </div>
           <div>
-            <label>UDL w (kN/m)</label>
-            <input class="udl" type="text" value="${escapeAttr(previous.udl)}">
+            <label>UDLs w (kN/m)</label>
+            <input class="udl" type="text" placeholder="15 or 15@0-3; 20@4-6" value="${escapeAttr(previous.udls)}">
           </div>
           <div class="points">
             <label>Point loads</label>
@@ -453,7 +454,7 @@
     function collectPayload() {
       const spans = [...spansEl.querySelectorAll('.span-row')].map(row => ({
         length: row.querySelector('.length').value,
-        udl: row.querySelector('.udl').value,
+        udls: row.querySelector('.udl').value,
         point_loads: row.querySelector('.point-loads').value
       }));
       return {
@@ -650,8 +651,11 @@
         const x1 = xScale(span.start);
         const x2 = xScale(span.end);
         const mid = (x1 + x2) / 2;
-        const udl = Number(span.udl);
-        const udlMarkup = udl > 0 ? drawUdl(x1, x2, beamY - 72, beamY - 18, `${udl.toFixed(2)} kN/m`) : '';
+        const udlMarkup = (span.udls || []).map(u => {
+          const ux1 = xScale(span.start + u.a);
+          const ux2 = xScale(span.start + u.b);
+          return drawUdl(ux1, ux2, beamY - 72, beamY - 18, `${u.w.toFixed(2)} kN/m`);
+        }).join('');
         const points = (span.point_loads || []).map(point => {
           const x = xScale(span.start + Number(point.distance));
           return drawArrow(x, beamY - 78, x, beamY - 16, '#d97706', `${Number(point.load).toFixed(2)} kN`);
@@ -871,9 +875,14 @@
         }
         
         let udlHtml = '';
-        if (span.udl > 0) {
-            udlHtml = `<rect x="${pad}" y="${beamY - 12}" width="${w - 2 * pad}" height="12" fill="#4caf50" opacity="0.5"/>
-                       <text x="${w/2}" y="${beamY - 18}" text-anchor="middle" font-size="12" fill="#1b5e20">${span.udl} kN/m</text>`;
+        if (span.udls && span.udls.length > 0) {
+            udlHtml = span.udls.map(u => {
+                const ux1 = pad + (u.a / span.length) * (w - 2 * pad);
+                const ux2 = pad + (u.b / span.length) * (w - 2 * pad);
+                const umid = (ux1 + ux2) / 2;
+                return `<rect x="${ux1}" y="${beamY - 12}" width="${ux2 - ux1}" height="12" fill="#4caf50" opacity="0.5"/>
+                        <text x="${umid}" y="${beamY - 18}" text-anchor="middle" font-size="12" fill="#1b5e20">${u.w} kN/m</text>`;
+            }).join('');
         }
 
         const fbdSvg = `
@@ -899,8 +908,12 @@
         let momentExpression = `${mlStr} {\\color{#9ca3af} \\textit{(} M_L \\textit{)}} `;
         if (loadMoment !== 0) {
              let loadFormulas = [];
-             if (span.udl > 0) {
-                 loadFormulas.push(`(${span.udl} \\times ${span.length} \\times \\frac{${span.length}}{2})`);
+             if (span.udls && span.udls.length > 0) {
+                 span.udls.forEach(u => {
+                     const midPos = ((u.a + u.b) / 2).toFixed(4);
+                     const loadLen = (u.b - u.a).toFixed(4);
+                     loadFormulas.push(`(${u.w} \\times ${loadLen} \\times ${midPos})`);
+                 });
              }
              if (span.point_loads && span.point_loads.length > 0) {
                  span.point_loads.forEach(p => {
@@ -914,8 +927,11 @@
         const forceEq = `\\( \\Sigma F_y = 0 \\quad \\uparrow + \\)`;
         
         let forceLoadFormulas = [];
-        if (span.udl > 0) {
-            forceLoadFormulas.push(`(${span.udl} \\times ${span.length})`);
+        if (span.udls && span.udls.length > 0) {
+            span.udls.forEach(u => {
+                const loadLen = (u.b - u.a).toFixed(4);
+                forceLoadFormulas.push(`(${u.w} \\times ${loadLen})`);
+            });
         }
         if (span.point_loads && span.point_loads.length > 0) {
             span.point_loads.forEach(p => {
