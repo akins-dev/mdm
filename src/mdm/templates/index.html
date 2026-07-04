@@ -836,7 +836,7 @@
         const isExtreme = Math.abs(Math.abs(point.y) - maxAbsY) < 1e-6;
         const isZero = Math.abs(point.y) < 1e-6;
         const isKey = Boolean(point.key);
-        if (index === 0 || index === points.length - 1 || isSupport || isExtreme || isZero || isKey) {
+        if (index === 0 || index === points.length - 1 || isSupport || isZero || isKey) {
           // Prevent near-identical points from generating duplicate labels
           const isDuplicate = selected.some(s => Math.abs(s.x - point.x) < 0.05 && Math.abs(s.y - point.y) < 0.1);
           if (!isDuplicate) {
