@@ -106,7 +106,7 @@ class Span:
                         {"value": f"{label} {range_str}", "rowspan": 2},
                         self.left_end,
                         "\\(-\\frac{w}{L^2}[\\frac{L}{3}(b^3-a^3)-\\frac{1}{4}(b^4-a^4)]\\)",
-                        f"\\(-\\frac{{{fmt(w)}}}{{{fmt(L)}}}^2[\\frac{{{fmt(L)}}}{{3}}({fmt(b)}^3-{fmt(a)}^3)-\\frac{{1}}{{4}}({fmt(b)}^4-{fmt(a)}^4)]\\)",
+                        f"\\(-\\frac{{{fmt(w)}}}{{{fmt(L)}^2}}[\\frac{{{fmt(L)}}}{{3}}({fmt(b)}^3-{fmt(a)}^3)-\\frac{{1}}{{4}}({fmt(b)}^4-{fmt(a)}^4)]\\)",
                         money(left_value),
                     ]
                 )
@@ -117,7 +117,7 @@ class Span:
                         None,
                         self.right_end,
                         "\\(\\frac{w}{L^2}[\\frac{1}{4}(b^4-a^4)-\\frac{a}{3}(b^3-a^3)]\\)",
-                        f"\\(\\frac{{{fmt(w)}}}{{{fmt(L)}}}^2[\\frac{{1}}{{4}}({fmt(b)}^4-{fmt(a)}^4)-\\frac{{{fmt(a)}}}{{3}}({fmt(b)}^3-{fmt(a)}^3)]\\)",
+                        f"\\(\\frac{{{fmt(w)}}}{{{fmt(L)}^2}}[\\frac{{1}}{{4}}({fmt(b)}^4-{fmt(a)}^4)-\\frac{{{fmt(a)}}}{{3}}({fmt(b)}^3-{fmt(a)}^3)]\\)",
                         money(right_value),
                     ]
                 )
