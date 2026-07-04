@@ -34,3 +34,6 @@ Thumbs.db
 
 .codex
 .agents
+
+# Large files
+*.pdf
