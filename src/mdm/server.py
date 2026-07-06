@@ -415,6 +415,17 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                             )
                             reports.append(shear_html)
                             
+                            demarcation_html = """
+                            <div style='margin: 48px 0 24px; position: relative; text-align: center;'>
+                                <div style='position: absolute; top: 50%; left: 0; right: 0; border-top: 2px dashed #cbd5e1; z-index: 1;'></div>
+                                <div style='position: relative; z-index: 2; display: inline-block; background: #fff; padding: 0 24px; border-radius: 99px;'>
+                                    <h3 style='margin: 0; color: #0f172a; font-size: 1.1rem; font-weight: 700; letter-spacing: 1px;'>INDIVIDUAL SPAN & SUPPORT DESIGNS</h3>
+                                    <p style='margin: 4px 0 0; color: #64748b; font-size: 0.9rem; font-style: italic;'>Calculated using their original, individual shear forces</p>
+                                </div>
+                            </div>
+                            """
+                            reports.append(demarcation_html)
+                            
                 self.send_json(200, {"reports": reports})
             except Exception as error:
                 import traceback

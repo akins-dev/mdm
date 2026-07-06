@@ -125,13 +125,15 @@ def design_section(
     html_lines.append("<p class='text-sm text-gray-600 mb-2'><b>Note:</b> Section designed strictly as a Rectangular Beam (per Oyenuga). Partial safety factor for steel \\(\\gamma_m = 1.05\\), hence using \\(0.95 f_y\\) instead of \\(0.87 f_y\\).</p>")
     
     if notes:
-        html_lines.append("<div class='mb-4 p-3' style='background-color: #000; color: #fff; border-radius: 4px; font-size: 0.9em;'>")
-        html_lines.append("<div style='font-weight: bold; margin-bottom: 8px;'>When designing reinforcement:</div>")
-        html_lines.append("<ul style='list-style-type: disc; padding-left: 20px; margin-bottom: 8px;'>")
+        html_lines.append("<div class='mb-6' style='background: linear-gradient(135deg, #1e293b, #0f172a); color: #f8fafc; border-radius: 8px; padding: 20px 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); font-size: 0.95em; border-left: 4px solid #3b82f6;'>")
+        html_lines.append("<div style='font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;'>")
+        html_lines.append("<svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='#60a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><line x1='12' y1='16' x2='12' y2='12'></line><line x1='12' y1='8' x2='12.01' y2='8'></line></svg>")
+        html_lines.append("Design Notes</div>")
+        html_lines.append("<ul style='list-style-type: none; padding-left: 0; margin-bottom: 12px; display: grid; gap: 8px;'>")
         for note in notes[:-1]:
-            html_lines.append(f"<li>{note}</li>")
+            html_lines.append(f"<li style='display: flex; gap: 8px;'><span style='color: #60a5fa;'>•</span><span>{note}</span></li>")
         html_lines.append("</ul>")
-        html_lines.append(f"<p style='margin: 0;'>{notes[-1]}</p>")
+        html_lines.append(f"<div style='margin: 0; padding-top: 12px; border-top: 1px solid #334155; font-style: italic; color: #cbd5e1;'>{notes[-1]}</div>")
         html_lines.append("</div>")
     
     M_abs = abs(M)
