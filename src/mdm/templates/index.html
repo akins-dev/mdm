@@ -1010,9 +1010,18 @@
              let loadFormulas = [];
              if (span.udls && span.udls.length > 0) {
                  span.udls.forEach(u => {
-                     const midPos = ((u.a + u.b) / 2).toFixed(4);
-                     const loadLen = (u.b - u.a).toFixed(4);
-                     loadFormulas.push(`(${u.w} \\times ${loadLen} \\times ${midPos})`);
+                     const L = span.length;
+                     const a = parseFloat(u.a.toFixed(4));
+                     const b = parseFloat(u.b.toFixed(4));
+                     let formula = "";
+                     if (a === 0 && Math.abs(b - L) < 0.001) {
+                         formula = `${u.w} \\times ${L.toFixed(3)} \\times \\frac{${L.toFixed(3)}}{2}`;
+                     } else if (a === 0) {
+                         formula = `${u.w} \\times ${b} \\times \\frac{${b}}{2}`;
+                     } else {
+                         formula = `${u.w} \\times (${b} - ${a}) \\times \\left(\\frac{${b} - ${a}}{2} + ${a}\\right)`;
+                     }
+                     loadFormulas.push(`(${formula})`);
                  });
              }
              if (span.point_loads && span.point_loads.length > 0) {
@@ -1029,8 +1038,18 @@
         let forceLoadFormulas = [];
         if (span.udls && span.udls.length > 0) {
             span.udls.forEach(u => {
-                const loadLen = (u.b - u.a).toFixed(4);
-                forceLoadFormulas.push(`(${u.w} \\times ${loadLen})`);
+                const L = span.length;
+                const a = parseFloat(u.a.toFixed(4));
+                const b = parseFloat(u.b.toFixed(4));
+                let formula = "";
+                if (a === 0 && Math.abs(b - L) < 0.001) {
+                    formula = `${u.w} \\times ${L.toFixed(3)}`;
+                } else if (a === 0) {
+                    formula = `${u.w} \\times ${b}`;
+                } else {
+                    formula = `${u.w} \\times (${b} - ${a})`;
+                }
+                forceLoadFormulas.push(`(${formula})`);
             });
         }
         if (span.point_loads && span.point_loads.length > 0) {
