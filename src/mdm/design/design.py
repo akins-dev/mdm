@@ -110,13 +110,17 @@ def design_section(
     show_position: bool = True,
     notes: list = None,
     skip_shear: bool = False,
-    skip_drawing: bool = False
+    skip_drawing: bool = False,
+    is_uplifted: bool = False
 ) -> Dict[str, Any]:
     
     style_attr = f" style='background-color: {bg_color}; border-color: #f59e0b; border-width: 2px;'" if bg_color else ""
     html_lines = [f"<div class='calc-sheet'{style_attr}>"]
     
-    suffix = f" {'(Support)' if is_support else '(Span)'}" if show_position else ""
+    if is_uplifted:
+        suffix = " (Uplifted Span)" if show_position else ""
+    else:
+        suffix = f" {'(Support)' if is_support else '(Span)'}" if show_position else ""
     header_text = f"Design for {name}{suffix}"
     if highlight_title:
         header_text += f" - <span style='background-color: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;'>{highlight_title}</span>"
@@ -134,6 +138,19 @@ def design_section(
             html_lines.append(f"<li style='display: flex; gap: 8px;'><span style='color: #60a5fa;'>•</span><span>{note}</span></li>")
         html_lines.append("</ul>")
         html_lines.append(f"<div style='margin: 0; padding-top: 12px; border-top: 1px solid #334155; font-style: italic; color: #cbd5e1;'>{notes[-1]}</div>")
+        html_lines.append("</div>")
+    
+    if is_uplifted:
+        html_lines.append("<div style='background: linear-gradient(135deg, #7c2d12, #9a3412); color: #fff7ed; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border-left: 4px solid #f97316; font-size: 0.95em;'>")
+        html_lines.append("<div style='display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 12px;'>")
+        html_lines.append("<svg width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='#fdba74' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'></path><line x1='12' y1='9' x2='12' y2='13'></line><line x1='12' y1='17' x2='12.01' y2='17'></line></svg>")
+        html_lines.append("UPLIFTED SPAN</div>")
+        html_lines.append("<p style='margin: 0 0 10px; line-height: 1.6;'>This span experiences <b>entirely negative (hogging) moments</b> under the applied loading arrangement. No sagging moment exists anywhere within this span.</p>")
+        html_lines.append("<ul style='list-style: none; padding: 0; margin: 0; display: grid; gap: 6px;'>")
+        html_lines.append("<li style='display: flex; gap: 8px;'><span style='color: #fdba74;'>▸</span><span><b>Top reinforcement</b> must run continuously across the entire span. Standard curtailment rules do not apply.</span></li>")
+        html_lines.append("<li style='display: flex; gap: 8px;'><span style='color: #fdba74;'>▸</span><span><b>Bottom reinforcement</b> is provided as minimum steel (A<sub>s,min</sub>) only, for ductility and as hanger bars for links.</span></li>")
+        html_lines.append("<li style='display: flex; gap: 8px;'><span style='color: #fdba74;'>▸</span><span><b>Deflection</b> check (span/d) does not apply — the span deflects upward (camber).</span></li>")
+        html_lines.append("</ul>")
         html_lines.append("</div>")
     
     M_abs = abs(M)
@@ -322,7 +339,20 @@ def design_section(
     is_cantilever = support_cond.lower() == "cantilever"
     check_deflection = False
     
-    if span_length > 0:
+    if is_uplifted:
+        # Uplifted span: skip deflection with explanatory note
+        if span_length > 0:
+            html_lines.append(row(
+                bs8110.REF_DEFLECTION_BASIC,
+                "<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Deflection Check</div>"
+                "<p>This span is entirely in hogging — the beam deflects <b>upward</b> (camber). "
+                "The standard span/effective-depth check per Table 3.9 & 3.10 is based on sagging tension steel "
+                "and does not apply to uplifted spans.<br/>"
+                "Deflection is governed by the adjacent spans which experience sagging.</p>",
+                "Not Applicable<br/>(Uplifted Span)",
+                "success"
+            ))
+    elif span_length > 0:
         if not show_position:
             check_deflection = True
         elif is_cantilever and is_support:

@@ -220,11 +220,14 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                     shear_values = analysis.get("tables", {}).get("shear_values", {}).get("rows", [])
                     
                     max_sagging_moment = 0.0
+                    max_hogging_moment = 0.0
                     for row in moment_values:
                         if str(row[0]) == span_name:
                             m_val = float(str(row[3]).replace(',', ''))
                             if m_val > max_sagging_moment:
                                 max_sagging_moment = m_val
+                            if m_val < max_hogging_moment:
+                                max_hogging_moment = m_val
                                 
                     max_abs_shear = 0.0
                     for row in shear_values:
@@ -241,6 +244,17 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                             "is_support": False,
                             "span_length_mm": float(span_info.get("length", 0)) * 1000.0,
                             "support_cond": support_cond
+                        })
+                    elif max_hogging_moment < -0.01:
+                        # Uplifted span: entirely hogging, no sagging moment exists
+                        span_tasks.append({
+                            "name": span_name,
+                            "M": max_hogging_moment,
+                            "V": max_abs_shear,
+                            "is_support": True,
+                            "span_length_mm": float(span_info.get("length", 0)) * 1000.0,
+                            "support_cond": support_cond,
+                            "is_uplifted": True
                         })
 
                 support_tasks = []
@@ -379,7 +393,8 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                         show_position=True if is_env else t.get("show_position", True),
                         notes=t.get("notes", None),
                         skip_shear=is_env,
-                        skip_drawing=is_env
+                        skip_drawing=is_env,
+                        is_uplifted=t.get("is_uplifted", False)
                     )
                     reports.append(report["html"])
                     
