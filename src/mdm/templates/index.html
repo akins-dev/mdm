@@ -343,11 +343,7 @@
               <div><label>Cover (mm)</label><input id="paramCover" type="number" value="30"></div>
               <div><label>Main Bar Ø (mm)</label><input id="paramMainBarDia" type="number" value="20"></div>
               <div><label>Link Ø (mm)</label><input id="paramLinkDia" type="number" value="10"></div>
-              <div><label>Support Type</label>
-                <select id="paramSupportCond">
-                  <option value="Continuous" selected>Continuous</option>
-                </select>
-              </div>
+
             </div>
             <div style="margin-top: 10px;">
                 <button class="primary" id="runDesign" style="width: 100%">Run RC Design</button>
@@ -1150,7 +1146,7 @@
                     cover: document.getElementById('paramCover').value,
                     main_bar_dia: document.getElementById('paramMainBarDia').value,
                     link_dia: document.getElementById('paramLinkDia').value,
-                    support_cond: document.getElementById('paramSupportCond').value
+                    support_cond: document.getElementById('beamType').value === 'simply_supported' ? 'Simply Supported' : 'Continuous'
                 }
             };
             const response = await fetch('/design', {
