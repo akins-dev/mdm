@@ -5,14 +5,9 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict, List, Tuple
 
-from .core import Span, fmt, support_names
-from .solver import (
-    build_standard_distribution_rows,
-    moment_distribution,
-    analysis_from_final_moments,
-    support_moment_rows
-)
-from .design import design_section
+from .models.beam import Span, fmt, support_names
+from .analyzers import ContinuousAnalyzer
+from .design.design import design_section
 
 
 def get_html_template() -> str:
@@ -133,90 +128,30 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
         spans.append(Span(left=left, right=right, length=length, udls=udls, point_loads=point_loads))
 
     fixed_supports = {supports[0], supports[-1]} if bool(payload.get("exterior_fixed", True)) else set()
-    distribution_rows, distribution_factors, joint_ends, opposite = build_standard_distribution_rows(
-        spans,
-        supports,
-        fixed_supports,
+    
+    beam_type = payload.get("beam_type", "continuous").lower()
+    overhang_type = payload.get("overhang_type", "left").lower()
+    
+    from .analyzers.overhanging import OverhangingAnalyzer
+    from .analyzers.simply_supported import SimplySupportedAnalyzer
+    from .analyzers.cantilever import CantileverAnalyzer
+    
+    if beam_type == "overhanging":
+        analyzer = OverhangingAnalyzer(overhang_type=overhang_type)
+    elif beam_type == "simply_supported":
+        analyzer = SimplySupportedAnalyzer()
+    elif beam_type == "cantilever":
+        analyzer = CantileverAnalyzer()
+    else:
+        analyzer = ContinuousAnalyzer()
+        
+    return analyzer.analyze(
+        spans=spans,
+        supports=supports,
+        fixed_supports=list(fixed_supports),
+        tolerance=tolerance,
+        max_cycles=max_cycles
     )
-    md_headers, md_rows, final_moments, cycles_used = moment_distribution(
-        spans,
-        supports,
-        fixed_supports,
-        distribution_factors,
-        joint_ends,
-        opposite,
-        tolerance,
-        max_cycles,
-    )
-    analysis = analysis_from_final_moments(spans, supports, final_moments)
-
-    return {
-        "status": (
-            f"Calculated {len(spans)} span(s) across {support_count} supports. "
-            f"Moment distribution completed in {cycles_used} cycle(s)."
-        ),
-        "tables": {
-            "distribution": {
-                "headers": ["Joints", "Member", "Stiffness \\(k = 1/L\\)", "\\(\\Sigma k\\)", "DF \\( = k / \\Sigma k\\)"],
-                "rows": distribution_rows,
-            },
-            "fem": {
-                "headers": ["Span", "Load", "End", "Formula", "Substitution", "Moment (kNm)"],
-                "rows": [row for span in spans for row in span.fixed_end_detail_rows()],
-            },
-            "moment": {"headers": md_headers, "rows": md_rows},
-            "reactions": {
-                "headers": ["Support", "Span", "Component", "Reaction (kN)"],
-                "rows": analysis["reaction_rows"],
-            },
-            "support_reactions": {
-                "headers": ["Support", "Total vertical reaction (kN)"],
-                "rows": analysis["support_rows"],
-            },
-            "support_reaction_calculations": {
-                "headers": ["Support", "Span-end reaction parts (kN)", "Summation", "Total reaction (kN)"],
-                "rows": analysis["support_reaction_calc_rows"],
-            },
-            "reaction_calculations": {
-                "headers": ["Span", "Calculation", "Formula", "Substitution", "Value (kN)"],
-                "rows": analysis["reaction_calc_rows"],
-            },
-            "shear_calculations": {
-                "headers": ["Span", "Formula", "Substitution"],
-                "rows": analysis["shear_calc_rows"],
-            },
-            "bending_calculations": {
-                "headers": ["Span", "Formula", "Substitution"],
-                "rows": analysis["bending_calc_rows"],
-            },
-            "equilibrium_checks": {
-                "headers": ["Location", "Check", "Formula", "Substitution", "Residual", "Status"],
-                "rows": analysis["equilibrium_rows"],
-            },
-            "extrema": {
-                "headers": ["Result", "Span", "Distance from left support (m)", "Value"],
-                "rows": analysis["extrema_rows"],
-            },
-            "shear_values": {
-                "headers": ["Span", "Local l (m)", "Global l (m)", "Shear V (kN)"],
-                "rows": analysis["shear_value_rows"],
-            },
-            "moment_values": {
-                "headers": ["Span", "Local x (m)", "Global x (m)", "Bending moment M (kNm)"],
-                "rows": analysis["moment_value_rows"],
-            },
-            "extrema_summary": {
-                "headers": ["Result", "Span", "x from left support (m)", "Value"],
-                "rows": analysis["summary_rows"],
-            },
-            "support": {
-                "headers": ["Support", "Member-end moments (kNm)", "Algebraic joint sum (kNm)"],
-                "rows": support_moment_rows(supports, joint_ends, final_moments),
-            },
-        },
-        "diagrams": analysis["diagrams"],
-        "beam": analysis["beam"],
-    }
 
 
 class MomentDistributionHandler(BaseHTTPRequestHandler):
