@@ -373,6 +373,7 @@
       }
       rebuildSpans();
     });
+    document.getElementById('overhangType').addEventListener('change', rebuildSpans);
 
     const supportCount = document.getElementById('supportCount');
     supportCount.addEventListener('change', rebuildSpans);
@@ -443,6 +444,18 @@
 
     function rebuildSpans() {
       const count = Number(supportCount.value);
+      const beamType = document.getElementById('beamType').value;
+      const overhangType = document.getElementById('overhangType').value;
+      
+      let numSpans = count - 1;
+      if (beamType === 'overhanging') {
+          if (overhangType === 'left' || overhangType === 'right') {
+              numSpans = count;
+          } else if (overhangType === 'both') {
+              numSpans = count + 1;
+          }
+      }
+
       const old = new Map([...spansEl.querySelectorAll('.span-row')].map(row => [row.dataset.span, {
         length: row.querySelector('.length').value,
         udls: row.querySelector('.udl').value,
@@ -450,7 +463,7 @@
       }]));
       spansEl.innerHTML = '';
       if (!Number.isFinite(count) || count < 2) return;
-      for (let i = 0; i < count - 1; i++) {
+      for (let i = 0; i < numSpans; i++) {
         const left = supportName(i);
         const right = supportName(i + 1);
         const name = `${left}${right}`;
@@ -490,7 +503,7 @@
       return {
         beam_type: document.getElementById('beamType').value,
         overhang_type: document.getElementById('overhangType') ? document.getElementById('overhangType').value : 'left',
-        support_count: supportCount.value,
+        support_count: spans.length + 1,
         exterior_fixed: document.getElementById('exteriorFixed').checked,
         tolerance: document.getElementById('tolerance').value,
         max_cycles: document.getElementById('maxCycles').value,
