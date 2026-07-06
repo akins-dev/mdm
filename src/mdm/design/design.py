@@ -225,6 +225,7 @@ def design_section(
         ))
         
     # Minimum steel area
+    As_req_flexure = As_req
     As_min_pct = 0.24 if fy_eff <= 250 else 0.13
     As_min = (As_min_pct / 100.0) * b * h
     if As_req < As_min:
@@ -316,15 +317,26 @@ def design_section(
         html_lines.append(row(bs8110.REF_MAX_SPACING, spacing_str, spacing_out, spacing_status))
         
     # Deflection Check
-    if (not is_support or not show_position) and span_length > 0:
-        if support_cond.lower() == "cantilever":
+    is_cantilever = support_cond.lower() == "cantilever"
+    check_deflection = False
+    
+    if span_length > 0:
+        if not show_position:
+            check_deflection = True
+        elif is_cantilever and is_support:
+            check_deflection = True
+        elif not is_cantilever and not is_support:
+            check_deflection = True
+
+    if check_deflection:
+        if is_cantilever:
             basic_span_d = 7
         elif support_cond.lower() == "simply supported":
             basic_span_d = 20
         else:
             basic_span_d = 26
             
-        fs = (2.0 / 3.0) * fy * (As_req / area_prov)
+        fs = (2.0 / 3.0) * fy * (As_req_flexure / area_prov)
         M_bd2 = (M_abs * 1e6) / (b * d * d)
         mf_calc = 0.55 + (477.0 - fs) / (120.0 * (0.9 + M_bd2))
         mf = min(mf_calc, 2.0)
@@ -333,7 +345,7 @@ def design_section(
         actual_span_d = span_length / d
         
         defl_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Deflection Check ({support_cond})</div><p>"
-        defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
+        defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = \\frac{{2 \\times {fmt(fy)} \\times {money(As_req_flexure)}}}{{3 \\times {money(area_prov)}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"\\( \\frac{{M}}{{bd^2}} = {money(M_bd2)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"M.F. = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
         defl_str += f"Basic span ratio = {basic_span_d}<br/>"
