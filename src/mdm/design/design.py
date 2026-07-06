@@ -227,9 +227,9 @@ def design_section(
         
         calc_str += f"<p>\\( d'/x = {money(d_prime_over_x)} \\). "
         if d_prime_over_x <= bs8110.LIMIT_D_PRIME_X:
-            calc_str += f"\\( \\le {bs8110.LIMIT_D_PRIME_X} \\) (yields).</p>"
+            calc_str += f"\\( \\le {bs8110.LIMIT_D_PRIME_X} \\) (compression steel yields).</p>"
         else:
-            calc_str += f"<span class='text-danger'>\\( > {bs8110.LIMIT_D_PRIME_X} \\) (no yield)</span></p>"
+            calc_str += f"<span class='text-danger'>\\( > {bs8110.LIMIT_D_PRIME_X} \\) (compression steel does not yield)</span></p>"
             
         Asc_req = (M_abs - Mu) * 1e6 / (bs8110.PARTIAL_SAFETY_STEEL * fy_eff * (d - d_prime))
         calc_str += f"<p>\\( A'_{{sc}} = \\frac{{(M - M_u) \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} f_y (d - d')}} = \\frac{{({money(M_abs)} - {money(Mu)}) \\times 10^6}}{{{bs8110.PARTIAL_SAFETY_STEEL} \\times {fmt(fy_eff)} \\times ({fmt(d)} - {money(d_prime)})}} = {money(Asc_req)} \\text{{ mm}}^2 \\)</p>"
