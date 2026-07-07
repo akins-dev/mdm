@@ -7,7 +7,7 @@
   <script>
     window.MathJax = {
       tex: { inlineMath: [['\\(', '\\)'], ['$', '$']] },
-      svg: { fontCache: 'global' }
+      svg: { fontCache: 'local' }
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
@@ -271,13 +271,17 @@
       border-left: 1px solid #eee;
       padding-left: 10px;
     }
-    @media (max-width: 860px) {
-      main {
-        grid-template-columns: 1fr;
-        height: auto;
-      }
-      .table-wrap { height: 58vh; }
+    @media print {
+      body { background: #fff; color: #000; overflow: visible; }
+      header, .panel.inputs, .tabs { display: none !important; }
+      main { display: block; height: auto; padding: 0; }
+      .panel { border: none; overflow: visible; }
+      .table-wrap { height: auto !important; overflow: visible !important; padding: 0; }
+      #output { display: none !important; }
+      #print-area { display: block !important; margin: 20px; }
+      @page { margin: 15mm; }
     }
+    #print-area { display: none; }
   </style>
 </head>
 <body>
@@ -353,6 +357,7 @@
       <div class="actions">
         <button class="primary" id="calculate">Calculate Analysis</button>
         <button class="secondary" id="clear">Clear Outputs</button>
+        <button class="secondary" id="printReport">Print / PDF</button>
         <div id="status" class="status">Enter span data, then calculate.</div>
       </div>
     </section>
@@ -360,6 +365,7 @@
       <nav class="tabs" id="tabs"></nav>
       <div class="table-wrap" id="output"></div>
     </section>
+    <div id="print-area"></div>
   </main>
   <script>
     document.getElementById('beamType').addEventListener('change', (e) => {
@@ -1142,6 +1148,145 @@
         .replaceAll('_right', '<sub>right</sub>')
         .replaceAll('^2', '<sup>2</sup>');
     }
+
+    function generateAndPrintReport() {
+        if (!currentResults) {
+            setStatus('Please run analysis first to generate a report.', true);
+            return;
+        }
+        
+        let reportHtml = `
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="font-size: 24px; color: #16202a;">Hardy Cross Moment Distribution - Complete Report</h1>
+            </div>
+            
+            <h2 class="subheading" style="border-bottom: 2px solid #eee; padding-bottom: 5px;">1. Project Inputs</h2>
+            <div style="margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #fafafa; padding: 15px; border: 1px solid #eee; border-radius: 6px;">
+                <div><strong>Beam Type:</strong> ${document.getElementById('beamType').options[document.getElementById('beamType').selectedIndex].text}</div>
+                <div><strong>Number of Supports:</strong> ${document.getElementById('supportCount').value}</div>
+                <div><strong>Exterior Supports Fixed:</strong> ${document.getElementById('exteriorFixed').checked ? 'Yes' : 'No'}</div>
+                <div><strong>Tolerance:</strong> ${document.getElementById('tolerance').value}</div>
+                <div><strong>Maximum Cycles:</strong> ${document.getElementById('maxCycles').value}</div>
+            </div>
+
+            <h2 class="subheading" style="border-bottom: 2px solid #eee; padding-bottom: 5px;">2. Span Properties and Loads</h2>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+                <thead>
+                    <tr style="background: #edf2f7;">
+                        <th style="border: 1px solid #d9e0e7; padding: 8px;">Span</th>
+                        <th style="border: 1px solid #d9e0e7; padding: 8px;">Length (m)</th>
+                        <th style="border: 1px solid #d9e0e7; padding: 8px;">UDLs (kN/m)</th>
+                        <th style="border: 1px solid #d9e0e7; padding: 8px;">Point Loads (kN)</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        const spans = [...spansEl.querySelectorAll('.span-row')];
+        spans.forEach(row => {
+            const name = row.dataset.span;
+            const length = row.querySelector('.length').value || '-';
+            const udls = row.querySelector('.udl').value || '-';
+            const points = row.querySelector('.point-loads').value || '-';
+            reportHtml += `
+                <tr>
+                    <td style="border: 1px solid #d9e0e7; padding: 8px;"><strong>${name}</strong></td>
+                    <td style="border: 1px solid #d9e0e7; padding: 8px;">${length}</td>
+                    <td style="border: 1px solid #d9e0e7; padding: 8px;">${udls}</td>
+                    <td style="border: 1px solid #d9e0e7; padding: 8px;">${points}</td>
+                </tr>
+            `;
+        });
+        reportHtml += `</tbody></table>`;
+        
+        reportHtml += `
+            <h2 class="subheading" style="border-bottom: 2px solid #eee; padding-bottom: 5px;">3. RC Design Parameters</h2>
+            <div style="margin-bottom: 30px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #fafafa; padding: 15px; border: 1px solid #eee; border-radius: 6px;">
+                <div><strong>fcu:</strong> ${document.getElementById('paramFcu').value} N/mm²</div>
+                <div><strong>fy:</strong> ${document.getElementById('paramFy').value} N/mm²</div>
+                <div><strong>fyv:</strong> ${document.getElementById('paramFyv').value} N/mm²</div>
+                <div><strong>b:</strong> ${document.getElementById('paramB').value} mm</div>
+                <div><strong>h:</strong> ${document.getElementById('paramH').value} mm</div>
+                <div><strong>Cover:</strong> ${document.getElementById('paramCover').value} mm</div>
+                <div><strong>Main Bar Ø:</strong> ${document.getElementById('paramMainBarDia').value} mm</div>
+                <div><strong>Link Ø:</strong> ${document.getElementById('paramLinkDia').value} mm</div>
+            </div>
+        `;
+        
+        reportHtml += `<h2 class="subheading" style="border-bottom: 2px solid #eee; padding-bottom: 5px; page-break-before: always;">4. Analysis Results</h2>`;
+        
+        const renderTableForPrint = (key, title) => {
+             const table = currentResults.tables[key];
+             if (table) {
+                 return `<h3 style="margin-top: 20px;">${title}</h3>` + buildTable(table.headers, table.rows) + `<div style="margin-bottom: 30px;"></div>`;
+             }
+             return '';
+        };
+
+        reportHtml += renderTableForPrint('distribution', 'Distribution Factors');
+        reportHtml += renderTableForPrint('fem', 'Fixed-End Moment Calculations');
+        reportHtml += renderTableForPrint('moment', 'Moment Distribution');
+        
+        reportHtml += `<div style="page-break-before: always;"></div>`;
+        reportHtml += `<h3 style="margin-top: 20px;">Reactions</h3>`;
+        reportHtml += `
+          <div class="stack">
+            <div>
+              <h4 class="subheading">Span Reaction Force Calculations</h4>
+              ${renderFbdCalculations()}
+            </div>
+            <div>
+              <h4 class="subheading">Support Reaction Summation</h4>
+              ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
+            </div>
+            <div>
+              <h4 class="subheading">Span-End Reactions</h4>
+              ${buildTable(currentResults.tables.reactions.headers, currentResults.tables.reactions.rows)}
+            </div>
+            <div>
+              <h4 class="subheading">Total Support Reactions</h4>
+              ${buildTable(currentResults.tables.support_reactions.headers, currentResults.tables.support_reactions.rows)}
+            </div>
+            <div>
+              <h4 class="subheading">Equilibrium Checks</h4>
+              ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
+            </div>
+          </div>
+          <div style="margin-bottom: 30px;"></div>
+        `;
+
+        reportHtml += `<div style="page-break-before: always;"></div>`;
+        reportHtml += `<h3 style="margin-top: 20px;">Diagrams</h3>`;
+        reportHtml += renderDiagrams();
+        
+        if (currentDesignHtml) {
+            reportHtml += `<div style="page-break-before: always;"></div>`;
+            reportHtml += `
+                <h2 class="subheading" style="border-bottom: 2px solid #eee; padding-bottom: 5px;">5. RC Design (BS 8110)</h2>
+                ${currentDesignHtml}
+            `;
+        } else {
+            reportHtml += `<div style="margin-top: 30px; padding: 15px; background: #fffbe6; border: 1px solid #ffe58f;"><em>Note: RC Design was not run.</em></div>`;
+        }
+
+        const printArea = document.getElementById('print-area');
+        printArea.innerHTML = reportHtml;
+        
+        setTimeout(() => {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([printArea]).then(() => {
+                    window.print();
+                }).catch(() => {
+                    window.print();
+                });
+            } else {
+                applyMathFallback(printArea);
+                window.print();
+            }
+        }, 500);
+    }
+    
+    document.getElementById('printReport').addEventListener('click', generateAndPrintReport);
 
     document.getElementById('calculate').addEventListener('click', () => {
       calculate().catch(error => setStatus(error.message, true));
