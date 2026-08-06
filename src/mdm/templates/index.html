@@ -1467,24 +1467,28 @@
         const leftSup = span.left;
         const rightSup = span.right;
         
+        const hasUdl = span.udls && span.udls.length > 0;
         let pointLoadsHtml = '';
         if (span.point_loads && span.point_loads.length > 0) {
             pointLoadsHtml = span.point_loads.map(p => {
                const px = pad + (p.distance / span.length) * (w - 2 * pad);
-               return `<line x1="${px}" y1="${beamY - 40}" x2="${px}" y2="${beamY - 5}" stroke="#d97706" stroke-width="2.5" marker-end="url(#arrow-orange-fbd)"/>
-                       <text x="${px}" y="${beamY - 45}" text-anchor="middle" font-weight="bold" font-size="12" fill="#d97706" style="paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; stroke-linecap: round;">${p.load} kN</text>`;
+               const pointYTop = hasUdl ? beamY - 65 : beamY - 40;
+               const textY = hasUdl ? beamY - 70 : beamY - 45;
+               return `<line x1="${px}" y1="${pointYTop}" x2="${px}" y2="${beamY - 5}" stroke="#d97706" stroke-width="2.5" marker-end="url(#arrow-orange-fbd)"/>
+                       <text x="${px}" y="${textY}" text-anchor="middle" font-weight="bold" font-size="12" fill="#d97706" style="paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; stroke-linecap: round;">${p.load} kN</text>`;
             }).join('');
         }
         
-        let udlHtml = '';
+        let udlBackgroundHtml = '';
+        let udlForegroundHtml = '';
         if (span.udls && span.udls.length > 0) {
-            udlHtml = span.udls.map(u => {
+            span.udls.forEach(u => {
                 const ux1 = pad + (u.a / span.length) * (w - 2 * pad);
                 const ux2 = pad + (u.b / span.length) * (w - 2 * pad);
                 const umid = (ux1 + ux2) / 2;
-                return `<rect x="${ux1}" y="${beamY - 14}" width="${ux2 - ux1}" height="14" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5" opacity="0.8"/>
-                        <text x="${umid}" y="${beamY - 22}" text-anchor="middle" font-size="12" font-weight="bold" fill="#15803d" style="paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; stroke-linecap: round;">${u.w} kN/m</text>`;
-            }).join('');
+                udlBackgroundHtml += `<rect x="${ux1}" y="${beamY - 14}" width="${ux2 - ux1}" height="14" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5" opacity="0.8"/>`;
+                udlForegroundHtml += `<text x="${umid}" y="${beamY - 22}" text-anchor="middle" font-size="12" font-weight="bold" fill="#15803d" style="paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; stroke-linecap: round;">${u.w} kN/m</text>`;
+            });
         }
 
             let fbdKeyPoints = [0, Number(span.length)];
@@ -1514,7 +1518,7 @@
             }
 
         const fbdSvg = `
-          <svg viewBox="0 0 ${w} ${h}" style="max-width: 400px; background: #fff; border: 1px solid #e5eaf0; border-radius: 4px; margin-bottom: 12px;">
+          <svg viewBox="0 0 ${w} ${h}" style="width: 100%; max-width: 550px; background: #fff; border: 1px solid #e5eaf0; border-radius: 4px; margin-bottom: 12px;">
             <defs>
               <marker id="arrow-blue-fbd" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
                 <path d="M0,0 L8,4 L0,8 Z" fill="#1264a3"></path>
@@ -1528,8 +1532,9 @@
             <text x="${w - pad + 15}" y="${beamY + 5}" font-size="14" font-weight="bold" fill="#1b2430">${rightSup}</text>
             ${drawMoment(pad, true, mlNum)}
             ${drawMoment(w - pad, false, mrNum)}
-            ${udlHtml}
+            ${udlBackgroundHtml}
             ${pointLoadsHtml}
+            ${udlForegroundHtml}
             <line x1="${pad}" y1="${beamY + 35}" x2="${pad}" y2="${beamY + 8}" stroke="#1264a3" stroke-width="2.5" marker-end="url(#arrow-blue-fbd)"/>
             <text x="${pad}" y="${beamY + 50}" text-anchor="middle" font-size="13" font-weight="bold" fill="#1264a3">R<tspan baseline-shift="sub" font-size="0.75em">${leftSup}</tspan></text>
             <line x1="${w - pad}" y1="${beamY + 35}" x2="${w - pad}" y2="${beamY + 8}" stroke="#1264a3" stroke-width="2.5" marker-end="url(#arrow-blue-fbd)"/>
