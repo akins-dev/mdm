@@ -808,29 +808,36 @@
       `;
     }
 
-    function drawUdl(x1, x2, yTop, yBottom, label) {
-      const count = Math.max(3, Math.min(10, Math.floor((x2 - x1) / 55)));
-      const arrows = [];
-      for (let index = 0; index < count; index += 1) {
-        const x = x1 + ((index + 0.5) / count) * (x2 - x1);
-        arrows.push(drawArrow(x, yTop, x, yBottom, '#b42318', ''));
+    function drawUdl(x1, x2, yTop, yBottom, label, mode = 'all') {
+      let html = '';
+      if (mode === 'all' || mode === 'graphics') {
+        const count = Math.max(3, Math.min(10, Math.floor((x2 - x1) / 55)));
+        const arrows = [];
+        for (let index = 0; index < count; index += 1) {
+          const x = x1 + ((index + 0.5) / count) * (x2 - x1);
+          arrows.push(drawArrow(x, yTop, x, yBottom, '#b42318', '', 'graphics'));
+        }
+        html += `\n        <line x1="${x1 + 8}" y1="${yTop}" x2="${x2 - 8}" y2="${yTop}" stroke="#b42318" stroke-width="2"></line>\n        ${arrows.join('')}`;
       }
-      return `
-        <line x1="${x1 + 8}" y1="${yTop}" x2="${x2 - 8}" y2="${yTop}" stroke="#b42318" stroke-width="2"></line>
-        ${arrows.join('')}
-        <text x="${(x1 + x2) / 2 - 26}" y="${yTop - 8}">${escapeHtml(label)}</text>
-      `;
+      if (mode === 'all' || mode === 'text') {
+        html += `\n        <text x="${(x1 + x2) / 2 - 26}" y="${yTop - 8}" fill="#1d2939" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">${escapeHtml(label)}</text>`;
+      }
+      return html + '\n      ';
     }
 
-    function drawArrow(x1, y1, x2, y2, color, label) {
+    function drawArrow(x1, y1, x2, y2, color, label, mode = 'all') {
       let marker = 'arrow-red';
       if (color === '#1264a3') marker = 'arrow-blue';
       else if (color === '#d97706') marker = 'arrow-orange';
       const textY = y1 < y2 ? y1 - 6 : y1 + 16;
-      return `
-        <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2.5" marker-end="url(#${marker})"></line>
-        ${label ? `<text x="${x1 + 5}" y="${textY}">${escapeHtml(label)}</text>` : ''}
-      `;
+      let html = '';
+      if (mode === 'all' || mode === 'graphics') {
+        html += `\n        <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2.5" marker-end="url(#${marker})"></line>`;
+      }
+      if (mode === 'all' || mode === 'text') {
+        html += label ? `\n        <text x="${x1 + 10}" y="${textY}" fill="#1d2939" font-weight="600" paint-order="stroke" stroke="#ffffff" stroke-width="4" stroke-linejoin="round">${escapeHtml(label)}</text>` : '';
+      }
+      return html + '\n      ';
     }
 
     function drawDiagram(points, supports, color, label) {
@@ -931,24 +938,31 @@
       const femRows = (results.tables && results.tables.fem && results.tables.fem.rows) ? results.tables.fem.rows : [];
 
       const spanTotals = {};
+      const hasTotalRow = {};
+
+      let currentLoadName = '';
       femRows.forEach(r => {
-        const loadName = typeof r[1] === 'object' ? r[1]?.value : r[1];
-        if (loadName === 'Total' || loadName === 'UDL' || (typeof loadName === 'string' && loadName.includes('Point')) || (typeof loadName === 'string' && loadName.includes('UDL'))) {
-          const end = r[2];
-          const val = parseFloat(r[5]);
-          if (!isNaN(val)) {
-            if (loadName === 'Total' || spanTotals[end] === undefined) {
-              spanTotals[end] = val;
-            }
+        if (r[1] !== null && r[1] !== undefined) {
+          currentLoadName = typeof r[1] === 'object' ? r[1]?.value : r[1];
+        }
+        const loadName = currentLoadName;
+        const end = r[2];
+        const val = parseFloat(r[5]);
+        if (!isNaN(val) && end) {
+          if (loadName === 'Total') {
+            spanTotals[end] = val;
+            hasTotalRow[end] = true;
+          } else if (!hasTotalRow[end]) {
+            spanTotals[end] = (spanTotals[end] || 0) + val;
           }
         }
       });
 
       const spanMarkup = spans.map((span) => {
         const width = 900;
-        const height = 220;
-        const pad = { left: 110, right: 110, top: 50, bottom: 50 };
-        const beamY = 125;
+        const height = 235;
+        const pad = { left: 120, right: 120, top: 55, bottom: 55 };
+        const beamY = 135;
         const x1 = pad.left;
         const x2 = width - pad.right;
         const length = Number(span.length) || 1;
@@ -969,13 +983,14 @@
           rightFem = femRowRight ? parseFloat(femRowRight[5]) : 0;
         }
 
-        let wallHatchLeft = `<line x1="${x1}" y1="45" x2="${x1}" y2="195" stroke="#344054" stroke-width="4" />`;
-        for (let y = 50; y <= 185; y += 12) {
+        // Fixed Support Hatches
+        let wallHatchLeft = `<line x1="${x1}" y1="45" x2="${x1}" y2="205" stroke="#344054" stroke-width="4" />`;
+        for (let y = 50; y <= 195; y += 12) {
           wallHatchLeft += `<line x1="${x1}" y1="${y}" x2="${x1 - 14}" y2="${y + 12}" stroke="#667085" stroke-width="2" />`;
         }
 
-        let wallHatchRight = `<line x1="${x2}" y1="45" x2="${x2}" y2="195" stroke="#344054" stroke-width="4" />`;
-        for (let y = 50; y <= 185; y += 12) {
+        let wallHatchRight = `<line x1="${x2}" y1="45" x2="${x2}" y2="205" stroke="#344054" stroke-width="4" />`;
+        for (let y = 50; y <= 195; y += 12) {
           wallHatchRight += `<line x1="${x2}" y1="${y}" x2="${x2 + 14}" y2="${y + 12}" stroke="#667085" stroke-width="2" />`;
         }
 
@@ -983,8 +998,34 @@
         const curvePath = `M ${x1} ${beamY} C ${x1 + 180} ${beamY + 55}, ${x2 - 180} ${beamY + 55}, ${x2} ${beamY}`;
         const elasticCurve = `<path d="${curvePath}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="6,4" />`;
 
-        let loadsHtml = '';
-        if (span.udls && span.udls.length > 0) {
+        // Calculate Total Load on Span for display
+        let totalSpanLoad = 0;
+
+        // Render Loads with Color Differentiation & Anti-Collision Y Offsets
+        let loadsBackgroundHtml = '';
+        let loadsMiddleHtml = '';
+        let loadsForegroundHtml = '';
+
+        const hasUdl = span.udls && span.udls.length > 0 && span.udls.some(item => Number(typeof item === 'object' ? item.w : item[0]) > 0);
+        const hasPointLoad = span.point_loads && span.point_loads.length > 0 && span.point_loads.some(item => Number(typeof item === 'object' ? (item.load !== undefined ? item.load : item.p) : item[0]) > 0);
+
+        if (hasPointLoad) {
+          span.point_loads.forEach(item => {
+            const p = Number(typeof item === 'object' ? (item.load !== undefined ? item.load : item.p) : item[0]);
+            const a = Number(typeof item === 'object' ? (item.distance !== undefined ? item.distance : item.a) : item[1]);
+            if (!isNaN(p) && p > 0) {
+              totalSpanLoad += p;
+              const pX = xScale(isNaN(a) ? 0 : a);
+              
+              // Point Load uses Vibrant Amber/Orange (#d97706)
+              // If UDL is also present on the span, extend point load arrow higher (beamY - 75) to prevent text collision!
+              const pointYTop = hasUdl ? beamY - 75 : beamY - 50;
+              loadsMiddleHtml += drawArrow(pX, pointYTop, pX, beamY - 5, '#d97706', `P = ${p} kN`);
+            }
+          });
+        }
+
+        if (hasUdl) {
           span.udls.forEach(item => {
             const w = Number(typeof item === 'object' ? item.w : item[0]);
             const a = Number(typeof item === 'object' ? item.a : item[1]);
@@ -992,46 +1033,46 @@
             if (!isNaN(w) && w > 0) {
               const uX1 = xScale(isNaN(a) ? 0 : a);
               const uX2 = xScale(isNaN(b) ? length : b);
-              loadsHtml += drawUdl(uX1, uX2, beamY - 45, beamY - 5, `w = ${w} kN/m`);
-            }
-          });
-        }
-        if (span.point_loads && span.point_loads.length > 0) {
-          span.point_loads.forEach(item => {
-            const p = Number(typeof item === 'object' ? (item.load !== undefined ? item.load : item.p) : item[0]);
-            const a = Number(typeof item === 'object' ? (item.distance !== undefined ? item.distance : item.a) : item[1]);
-            if (!isNaN(p) && p > 0) {
-              const pX = xScale(isNaN(a) ? 0 : a);
-              loadsHtml += drawArrow(pX, beamY - 50, pX, beamY - 5, '#b42318', `P = ${p} kN`);
-            }
-          });
-        }
+              const udlLen = (isNaN(b) ? length : b) - (isNaN(a) ? 0 : a);
+              totalSpanLoad += w * udlLen;
 
+              // UDL uses Crimson Red (#b42318)
+              loadsBackgroundHtml += drawUdl(uX1, uX2, beamY - 45, beamY - 5, `w = ${w} kN/m`, 'graphics');
+              loadsForegroundHtml += drawUdl(uX1, uX2, beamY - 45, beamY - 5, `w = ${w} kN/m`, 'text');
+            }
+          });
+        }
+        
+        let loadsHtml = loadsBackgroundHtml + loadsMiddleHtml + loadsForegroundHtml;
+
+        // Curved Moment Arrows & Subscript Formatting
+        // Left End Arc (CCW)
         const leftArc = `M ${x1 + 35} ${beamY - 25} A 32 32 0 0 0 ${x1 - 10} ${beamY - 10}`;
         const leftValStr = isNaN(leftFem) ? '0.00' : leftFem.toFixed(2);
         const leftMomentSvg = `
           <path d="${leftArc}" fill="none" stroke="#b42318" stroke-width="3" marker-end="url(#arrow-red)" />
-          <rect x="${x1 - 105}" y="${beamY - 65}" width="150" height="28" rx="5" fill="#fef2f2" stroke="#fecaca" stroke-width="1" />
-          <text x="${x1 - 30}" y="${beamY - 46}" font-size="12" font-weight="bold" fill="#b42318" text-anchor="middle">
-            M_${leftEnd} = ${leftValStr} kNm (↺)
+          <rect x="${x1 - 118}" y="${beamY - 65}" width="160" height="28" rx="5" fill="#fef2f2" stroke="#fecaca" stroke-width="1" />
+          <text x="${x1 - 38}" y="${beamY - 47}" font-size="12" font-weight="bold" fill="#b42318" text-anchor="middle">
+            M<tspan font-size="9" dy="2.5">${escapeHtml(leftEnd)}</tspan><tspan font-size="12" dy="-2.5"> = ${leftValStr} kNm (↺)</tspan>
           </text>
         `;
 
+        // Right End Arc (CW)
         const rightArc = `M ${x2 - 35} ${beamY - 25} A 32 32 0 0 1 ${x2 + 10} ${beamY - 10}`;
         const rightValStr = isNaN(rightFem) ? '0.00' : (rightFem > 0 ? '+' + rightFem.toFixed(2) : rightFem.toFixed(2));
         const rightMomentSvg = `
           <path d="${rightArc}" fill="none" stroke="#17b26a" stroke-width="3" marker-end="url(#arrow-green)" />
-          <rect x="${x2 - 45}" y="${beamY - 65}" width="150" height="28" rx="5" fill="#f6fef9" stroke="#a6f4c5" stroke-width="1" />
-          <text x="${x2 + 30}" y="${beamY - 46}" font-size="12" font-weight="bold" fill="#17b26a" text-anchor="middle">
-            M_${rightEnd} = ${rightValStr} kNm (↻)
+          <rect x="${x2 - 42}" y="${beamY - 65}" width="160" height="28" rx="5" fill="#f6fef9" stroke="#a6f4c5" stroke-width="1" />
+          <text x="${x2 + 38}" y="${beamY - 47}" font-size="12" font-weight="bold" fill="#17b26a" text-anchor="middle">
+            M<tspan font-size="9" dy="2.5">${escapeHtml(rightEnd)}</tspan><tspan font-size="12" dy="-2.5"> = ${rightValStr} kNm (↻)</tspan>
           </text>
         `;
 
         return `
           <div style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 8px; padding: 16px; margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
             <div style="font-weight: 700; font-size: 15px; color: #1d2939; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-              <span>Span ${escapeHtml(spanName)} Fixed-End Moment Mechanics (L = ${length} m)</span>
-              <span style="font-size: 12px; font-weight: 600; color: #475467; background: #f2f4f7; padding: 4px 10px; border-radius: 12px;">Clamped Ends (\\(\\theta = 0\\))</span>
+              <span>Span ${escapeHtml(spanName)} Fixed-End Moment Mechanics (L = ${length} m${totalSpanLoad > 0 ? `, Total Load = ${totalSpanLoad.toFixed(2)} kN` : ''})</span>
+              <span style="font-size: 12px; font-weight: 600; color: #475467; background: #f2f4f7; padding: 4px 10px; border-radius: 12px;">Clamped Fixed Ends (\\(\\theta = 0\\))</span>
             </div>
             <svg class="diagram" viewBox="0 0 ${width} ${height}" role="img" aria-label="FEM Diagram Span ${spanName}">
               <defs>
@@ -1041,6 +1082,9 @@
                 <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
                   <path d="M0,0 L8,4 L0,8 Z" fill="#b42318"></path>
                 </marker>
+                <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#d97706"></path>
+                </marker>
               </defs>
               ${wallHatchLeft}
               ${wallHatchRight}
@@ -1049,10 +1093,11 @@
               ${loadsHtml}
               ${leftMomentSvg}
               ${rightMomentSvg}
-              <!-- Joint Labels -->
+              <!-- Joint Node Labels -->
               <text x="${x1}" y="${beamY + 35}" font-size="14" font-weight="bold" fill="#1d2939" text-anchor="middle">${escapeHtml(leftName)}</text>
               <text x="${x2}" y="${beamY + 35}" font-size="14" font-weight="bold" fill="#1d2939" text-anchor="middle">${escapeHtml(rightName)}</text>
-              <text x="${(x1 + x2) / 2}" y="${beamY + 68}" font-size="12" fill="#475467" text-anchor="middle">Double-Curvature Elastic Curve under Fixed Boundary Restraint</text>
+              
+              <text x="${(x1 + x2) / 2}" y="${beamY + 75}" font-size="12" fill="#475467" text-anchor="middle">Double-Curvature Elastic Curve under Fixed Boundary Restraint</text>
             </svg>
           </div>
         `;
