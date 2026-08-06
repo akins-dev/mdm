@@ -645,7 +645,13 @@
         outputEl.innerHTML = buildTable(table.headers, table.rows) + dfNote;
       } else if (activeTab === 'fem') {
         const femNote = '<p class="formula">Clockwise member-end moments are positive. \\(UDL: M_L=-wL^2/12, M_R=wL^2/12\\). Point load: \\(M_L=-Pab^2/L^2, M_R=Pa^2b/L^2\\), where \\(b=L-a\\).</p>';
-        outputEl.innerHTML = femNote + buildTable(table.headers, table.rows);
+        let diagramsHtml = '';
+        try {
+          diagramsHtml = drawFemDiagrams(currentResults);
+        } catch (err) {
+          console.error("Error drawing FEM diagrams:", err);
+        }
+        outputEl.innerHTML = femNote + buildTable(table.headers, table.rows) + diagramsHtml;
       } else {
         outputEl.innerHTML = buildTable(table.headers, table.rows);
       }
@@ -917,6 +923,151 @@
         }
       });
       return selected;
+    }
+
+    function drawFemDiagrams(results) {
+      if (!results || !results.beam || !results.beam.spans) return '';
+      const spans = results.beam.spans;
+      const femRows = (results.tables && results.tables.fem && results.tables.fem.rows) ? results.tables.fem.rows : [];
+
+      const spanTotals = {};
+      femRows.forEach(r => {
+        const loadName = typeof r[1] === 'object' ? r[1]?.value : r[1];
+        if (loadName === 'Total' || loadName === 'UDL' || (typeof loadName === 'string' && loadName.includes('Point')) || (typeof loadName === 'string' && loadName.includes('UDL'))) {
+          const end = r[2];
+          const val = parseFloat(r[5]);
+          if (!isNaN(val)) {
+            if (loadName === 'Total' || spanTotals[end] === undefined) {
+              spanTotals[end] = val;
+            }
+          }
+        }
+      });
+
+      const spanMarkup = spans.map((span) => {
+        const width = 900;
+        const height = 220;
+        const pad = { left: 110, right: 110, top: 50, bottom: 50 };
+        const beamY = 125;
+        const x1 = pad.left;
+        const x2 = width - pad.right;
+        const length = Number(span.length) || 1;
+        const xScale = localX => x1 + (localX / Math.max(1e-6, length)) * (x2 - x1);
+
+        const leftName = span.left || 'A';
+        const rightName = span.right || 'B';
+        const spanName = span.name || (leftName + rightName);
+        const leftEnd = span.left_end || (leftName + rightName);
+        const rightEnd = span.right_end || (rightName + leftName);
+        
+        let leftFem = spanTotals[leftEnd];
+        let rightFem = spanTotals[rightEnd];
+        if (leftFem === undefined || rightFem === undefined) {
+          const femRowLeft = femRows.find(r => r[2] === leftEnd);
+          const femRowRight = femRows.find(r => r[2] === rightEnd);
+          leftFem = femRowLeft ? parseFloat(femRowLeft[5]) : 0;
+          rightFem = femRowRight ? parseFloat(femRowRight[5]) : 0;
+        }
+
+        let wallHatchLeft = `<line x1="${x1}" y1="45" x2="${x1}" y2="195" stroke="#344054" stroke-width="4" />`;
+        for (let y = 50; y <= 185; y += 12) {
+          wallHatchLeft += `<line x1="${x1}" y1="${y}" x2="${x1 - 14}" y2="${y + 12}" stroke="#667085" stroke-width="2" />`;
+        }
+
+        let wallHatchRight = `<line x1="${x2}" y1="45" x2="${x2}" y2="195" stroke="#344054" stroke-width="4" />`;
+        for (let y = 50; y <= 185; y += 12) {
+          wallHatchRight += `<line x1="${x2}" y1="${y}" x2="${x2 + 14}" y2="${y + 12}" stroke="#667085" stroke-width="2" />`;
+        }
+
+        const beamLine = `<line x1="${x1}" y1="${beamY}" x2="${x2}" y2="${beamY}" stroke="#1d2939" stroke-width="5" />`;
+        const curvePath = `M ${x1} ${beamY} C ${x1 + 180} ${beamY + 55}, ${x2 - 180} ${beamY + 55}, ${x2} ${beamY}`;
+        const elasticCurve = `<path d="${curvePath}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="6,4" />`;
+
+        let loadsHtml = '';
+        if (span.udls && span.udls.length > 0) {
+          span.udls.forEach(item => {
+            const w = Number(typeof item === 'object' ? item.w : item[0]);
+            const a = Number(typeof item === 'object' ? item.a : item[1]);
+            const b = Number(typeof item === 'object' ? item.b : item[2]);
+            if (!isNaN(w) && w > 0) {
+              const uX1 = xScale(isNaN(a) ? 0 : a);
+              const uX2 = xScale(isNaN(b) ? length : b);
+              loadsHtml += drawUdl(uX1, uX2, beamY - 45, beamY - 5, `w = ${w} kN/m`);
+            }
+          });
+        }
+        if (span.point_loads && span.point_loads.length > 0) {
+          span.point_loads.forEach(item => {
+            const p = Number(typeof item === 'object' ? (item.load !== undefined ? item.load : item.p) : item[0]);
+            const a = Number(typeof item === 'object' ? (item.distance !== undefined ? item.distance : item.a) : item[1]);
+            if (!isNaN(p) && p > 0) {
+              const pX = xScale(isNaN(a) ? 0 : a);
+              loadsHtml += drawArrow(pX, beamY - 50, pX, beamY - 5, '#b42318', `P = ${p} kN`);
+            }
+          });
+        }
+
+        const leftArc = `M ${x1 + 35} ${beamY - 25} A 32 32 0 0 0 ${x1 - 10} ${beamY - 10}`;
+        const leftValStr = isNaN(leftFem) ? '0.00' : leftFem.toFixed(2);
+        const leftMomentSvg = `
+          <path d="${leftArc}" fill="none" stroke="#b42318" stroke-width="3" marker-end="url(#arrow-red)" />
+          <rect x="${x1 - 105}" y="${beamY - 65}" width="150" height="28" rx="5" fill="#fef2f2" stroke="#fecaca" stroke-width="1" />
+          <text x="${x1 - 30}" y="${beamY - 46}" font-size="12" font-weight="bold" fill="#b42318" text-anchor="middle">
+            M_${leftEnd} = ${leftValStr} kNm (↺)
+          </text>
+        `;
+
+        const rightArc = `M ${x2 - 35} ${beamY - 25} A 32 32 0 0 1 ${x2 + 10} ${beamY - 10}`;
+        const rightValStr = isNaN(rightFem) ? '0.00' : (rightFem > 0 ? '+' + rightFem.toFixed(2) : rightFem.toFixed(2));
+        const rightMomentSvg = `
+          <path d="${rightArc}" fill="none" stroke="#17b26a" stroke-width="3" marker-end="url(#arrow-green)" />
+          <rect x="${x2 - 45}" y="${beamY - 65}" width="150" height="28" rx="5" fill="#f6fef9" stroke="#a6f4c5" stroke-width="1" />
+          <text x="${x2 + 30}" y="${beamY - 46}" font-size="12" font-weight="bold" fill="#17b26a" text-anchor="middle">
+            M_${rightEnd} = ${rightValStr} kNm (↻)
+          </text>
+        `;
+
+        return `
+          <div style="background: #ffffff; border: 1px solid #eaecf0; border-radius: 8px; padding: 16px; margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-weight: 700; font-size: 15px; color: #1d2939; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+              <span>Span ${escapeHtml(spanName)} Fixed-End Moment Mechanics (L = ${length} m)</span>
+              <span style="font-size: 12px; font-weight: 600; color: #475467; background: #f2f4f7; padding: 4px 10px; border-radius: 12px;">Clamped Ends (\\(\\theta = 0\\))</span>
+            </div>
+            <svg class="diagram" viewBox="0 0 ${width} ${height}" role="img" aria-label="FEM Diagram Span ${spanName}">
+              <defs>
+                <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#17b26a"></path>
+                </marker>
+                <marker id="arrow-red" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#b42318"></path>
+                </marker>
+              </defs>
+              ${wallHatchLeft}
+              ${wallHatchRight}
+              ${beamLine}
+              ${elasticCurve}
+              ${loadsHtml}
+              ${leftMomentSvg}
+              ${rightMomentSvg}
+              <!-- Joint Labels -->
+              <text x="${x1}" y="${beamY + 35}" font-size="14" font-weight="bold" fill="#1d2939" text-anchor="middle">${escapeHtml(leftName)}</text>
+              <text x="${x2}" y="${beamY + 35}" font-size="14" font-weight="bold" fill="#1d2939" text-anchor="middle">${escapeHtml(rightName)}</text>
+              <text x="${(x1 + x2) / 2}" y="${beamY + 68}" font-size="12" fill="#475467" text-anchor="middle">Double-Curvature Elastic Curve under Fixed Boundary Restraint</text>
+            </svg>
+          </div>
+        `;
+      }).join('');
+
+      const legend = `
+        <div style="font-size: 13px; color: #1f1f1f; margin-top: 16px; line-height: 1.6; background: #f0f7ff; padding: 14px 18px; border: 1px solid #84c5f4; border-radius: 6px;">
+          <strong style="color: #026aa7; font-size: 14px;">ℹ️ Fixed-End Moment (FEM) Sign Convention & Mechanics:</strong><br>
+          <strong>1. Clamped Boundary Condition:</strong> During FEM calculation, every span is analyzed as an isolated beam with both ends <strong>rigidly clamped</strong> (\\(\\theta_{\\text{left}} = 0, \\theta_{\\text{right}} = 0\\)).<br>
+          <strong>2. Rotational Tendency & Restraining Reactions:</strong> Downward loads bend the span downwards, causing the left end to tend to rotate <em>clockwise</em> (\\(\\circlearrowright\\)) and the right end to tend to rotate <em>counter-clockwise</em> (\\(\\circlearrowleft\\)). To prevent rotation, the left fixed wall exerts a <strong>Counter-Clockwise</strong> restraining moment (\\(M_L < 0, \\circlearrowleft\\)), while the right fixed wall exerts a <strong>Clockwise</strong> restraining moment (\\(M_R > 0, \\circlearrowright\\)).<br>
+          <strong>3. MDM Sign Convention:</strong> Clockwise end moments are assigned a <strong>positive (+)</strong> sign; Counter-clockwise end moments are assigned a <strong>negative (-)</strong> sign.
+        </div>
+      `;
+
+      return spanMarkup + legend;
     }
 
     function renderFbdCalculations() {
@@ -1252,7 +1403,7 @@
         `;
 
         reportHtml += renderTableForPrint('distribution', 'Distribution Factors') + printDfNote;
-        reportHtml += renderTableForPrint('fem', 'Fixed-End Moment Calculations');
+        reportHtml += renderTableForPrint('fem', 'Fixed-End Moment Calculations') + drawFemDiagrams(currentResults);
         reportHtml += renderTableForPrint('moment', 'Moment Distribution');
         
         reportHtml += `<div style="page-break-before: always;"></div>`;
