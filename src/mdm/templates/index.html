@@ -427,40 +427,60 @@
     
     const renderZeroShear = (calcs) => {
         if (!calcs || calcs.length === 0) return '';
-        let html = '<h2 class="subheading" style="margin-top: 30px;">Points of Zero Shear (Max Bending Moment Locations)</h2>';
+        let html = '<h2 class="subheading" style="margin-top: 30px; margin-bottom: 16px;">Points of Zero Shear (Max Bending Moment Locations)</h2>';
+        html += '<div style="display: grid; gap: 16px; margin-bottom: 30px;">';
+        
         calcs.forEach(calc => {
             html += `
-            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 15px;">
-                <div style="flex: 1;">
-                    <strong>Span ${escapeHtml(calc.span)}</strong><br>
-                    The shear force crosses zero at distance \\(l_{zero}\\) from the start of the span.<br>
-                    By similar triangles (or setting \\(V=0\\)):<br>
-                    \\( l_{zero} = l_{start} + \\frac{V_{start}}{w} \\)<br>
-                    \\( l_{zero} = ${calc.start.toFixed(4)} + \\frac{${calc.v_start.toFixed(4)}}{${calc.udl.toFixed(4)}} = \\mathbf{${calc.root.toFixed(4)} \\text{ m}} \\)
-                </div>
-                <div style="flex: 1;">
-                    <svg width="300" height="120" viewBox="-10 -10 310 130">
-                        <!-- Horizontal Axis -->
-                        <line x1="0" y1="50" x2="280" y2="50" stroke="#ccc" stroke-width="2"/>
-                        <!-- Start Point Marker -->
-                        <line x1="40" y1="45" x2="40" y2="55" stroke="#333"/>
-                        <!-- Zero Crossing Marker -->
-                        <line x1="200" y1="45" x2="200" y2="55" stroke="#1890ff" stroke-width="2"/>
-                        <!-- Text Labels -->
-                        <text x="45" y="15" font-size="12" fill="#ff4d4f" text-anchor="start">V=${calc.v_start.toFixed(4)}</text>
-                        <text x="40" y="68" font-size="12" fill="#666" text-anchor="middle">l=${calc.start.toFixed(4)}</text>
-                        <text x="200" y="40" font-size="12" font-weight="bold" fill="#1890ff" text-anchor="middle">V=0</text>
-                        <text x="200" y="68" font-size="12" font-weight="bold" fill="#1890ff" text-anchor="middle">l=${calc.root.toFixed(4)}</text>
-                        <text x="120" y="45" font-size="11" fill="#666" text-anchor="middle">Dist = ${calc.v_start.toFixed(4)}/${calc.udl.toFixed(4)}</text>
-                        <!-- Area shading -->
-                        <polygon points="40,50 200,50 40,10" fill="rgba(255, 77, 79, 0.1)"/>
-                        <!-- Shear Line (Extended slightly past zero) -->
-                        <line x1="40" y1="10" x2="240" y2="60" stroke="#ff4d4f" stroke-width="2"/>
-                    </svg>
-                </div>
+            <div style="background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+              <div style="background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 15px; color: #1e293b; display: flex; justify-content: space-between; align-items: center;">
+                <span>Span ${escapeHtml(calc.span)}</span>
+                <span style="font-size: 13px; font-weight: 600; color: #16a34a; background: #dcfce7; padding: 4px 10px; border-radius: 12px;">Max Moment Found Here 📍</span>
+              </div>
+              <div style="padding: 20px; display: flex; gap: 30px; align-items: center; flex-wrap: wrap;">
+                  <div style="flex: 1; min-width: 300px;">
+                      <p style="margin-top: 0; margin-bottom: 12px; color: #475569; font-size: 14px; line-height: 1.6;">
+                        Because a Uniformly Distributed Load (UDL) is present, the shear force diagram slopes downwards and crosses zero at a specific distance \\(l_{zero}\\). The bending moment is mathematically maximized at this exact location.
+                      </p>
+                      <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 6px; font-size: 14px; color: #334155;">
+                        <strong style="color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Calculation (Similar Triangles):</strong>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                          <div>\\( l_{zero} = l_{start} + \\frac{V_{start}}{w} \\)</div>
+                          <div>\\( l_{zero} = ${calc.start.toFixed(4)} + \\frac{${calc.v_start.toFixed(4)}}{${calc.udl.toFixed(4)}} = \\mathbf{${calc.root.toFixed(4)} \\text{ m}} \\)</div>
+                        </div>
+                      </div>
+                  </div>
+                  <div style="flex: 0 0 300px; display: flex; justify-content: center;">
+                      <svg width="280" height="100" viewBox="-10 -10 290 110" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+                          <!-- Horizontal Axis -->
+                          <line x1="0" y1="50" x2="260" y2="50" stroke="#cbd5e1" stroke-width="2"/>
+                          
+                          <!-- Area shading -->
+                          <polygon points="40,50 200,50 40,10" fill="rgba(239, 68, 68, 0.1)"/>
+                          
+                          <!-- Shear Line -->
+                          <line x1="40" y1="10" x2="220" y2="55" stroke="#ef4444" stroke-width="2.5"/>
+                          
+                          <!-- Start Point Marker -->
+                          <line x1="40" y1="45" x2="40" y2="55" stroke="#64748b" stroke-width="2"/>
+                          <!-- Zero Crossing Marker -->
+                          <line x1="200" y1="45" x2="200" y2="55" stroke="#3b82f6" stroke-width="2.5"/>
+                          
+                          <!-- Text Labels -->
+                          <text x="45" y="15" font-size="12" font-weight="bold" fill="#ef4444" text-anchor="start">V = ${calc.v_start.toFixed(2)}</text>
+                          <text x="40" y="68" font-size="11" fill="#64748b" text-anchor="middle">Start: ${calc.start.toFixed(2)}m</text>
+                          
+                          <text x="200" y="40" font-size="13" font-weight="bold" fill="#3b82f6" text-anchor="middle">V = 0</text>
+                          <text x="200" y="68" font-size="11" font-weight="bold" fill="#3b82f6" text-anchor="middle">Zero: ${calc.root.toFixed(2)}m</text>
+                          
+                          <text x="120" y="75" font-size="10" fill="#94a3b8" text-anchor="middle">Slope = UDL = -${calc.udl.toFixed(2)} kN/m</text>
+                      </svg>
+                  </div>
+              </div>
             </div>
             `;
         });
+        html += '</div>';
         return html;
     };
 
@@ -1000,9 +1020,9 @@
             ${drawDiagram(currentResults.diagrams.moment, currentResults.diagrams.supports, '#b42318', 'BMD')}
           </div>
           <div>
+            ${renderZeroShear(currentResults.beam.zero_shear_calcs)}
             <h2 class="subheading">Shear Calculations</h2>
             ${buildTable(currentResults.tables.shear_calculations.headers, currentResults.tables.shear_calculations.rows)}
-            ${renderZeroShear(currentResults.beam.zero_shear_calcs)}
           </div>
           <div>
             <h2 class="subheading">Bending Moment Calculations</h2>
