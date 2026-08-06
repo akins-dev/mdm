@@ -914,13 +914,13 @@
             
             svgHtml += `<path d="M ${dx} ${dy} L ${tx} ${ty}" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" marker-end="url(#arrow-blue)" />`;
             
-            const pillY = ty - 25;
+            const pillY = ty + 25;
             let sumStr = sourceCells.map(c => c.innerText.trim()).join(' + ');
-            if (sourceCells.length > 1) {
+            if (sourceCells.length > 1 || sumStr.startsWith('-')) {
                 sumStr = `(${sumStr})`;
             }
             const distVal = td.innerText.trim();
-            const eqStr = `- ${sumStr} × ${dfValText} = ${distVal}`;
+            const eqStr = `-${sumStr} × ${dfValText} = ${distVal}`;
             
             const pillW = eqStr.length * 6.5 + 20;
             
