@@ -183,11 +183,33 @@
       vertical-align: top;
     }
     th {
-      position: sticky;
-      top: 0;
       background: #edf2f7;
-      z-index: 1;
+      z-index: 2;
     }
+    .table-wrap {
+      position: relative;
+    }
+    #arrow-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 100;
+      overflow: visible;
+    }
+    .mdm-df td { background-color: #e6f7ff; font-weight: bold; }
+    .mdm-fem td { border-bottom: 2px solid #16202a; }
+    .mdm-distribute td { background-color: #ffffff; }
+    .mdm-carry td { background-color: #fafafa; border-bottom: 1px solid #e2e8f0; }
+    .mdm-carry td[id] { cursor: pointer; }
+    .mdm-final td { border-top: 3px double #16202a; font-weight: bold; background-color: #f8fafc; }
+    .mdm-pos { color: #027a48; }
+    .mdm-neg { color: #b42318; }
+    .mdm-zero { color: #94a3b8; }
+    .mdm-carry-hover-source { background-color: #fef0c7 !important; transition: background-color 0.1s; }
+    .mdm-carry-hover-target { background-color: #fdb022 !important; transition: background-color 0.1s; }
     .formula {
       margin: 0 0 10px;
       color: var(--muted);
@@ -643,6 +665,9 @@
           </div>
         `;
         outputEl.innerHTML = buildTable(table.headers, table.rows) + dfNote;
+      } else if (activeTab === 'moment') {
+        outputEl.innerHTML = buildMdmTable(table.headers, table.rows);
+        setupMdmHover();
       } else if (activeTab === 'fem') {
         const femNote = '<p class="formula">Clockwise member-end moments are positive. \\(UDL: M_L=-wL^2/12, M_R=wL^2/12\\). Point load: \\(M_L=-Pab^2/L^2, M_R=Pa^2b/L^2\\), where \\(b=L-a\\).</p>';
         let diagramsHtml = '';
@@ -656,6 +681,157 @@
         outputEl.innerHTML = buildTable(table.headers, table.rows);
       }
       typesetMath();
+    }
+
+    function buildMdmTable(headers, rows) {
+      let currentJoint = null;
+      let colspan = 0;
+      let ths = '';
+      for (let i = 0; i < headers.length; i++) {
+        if (i === 0) {
+          ths += `<th>${formatCell(headers[i])}</th>`;
+          continue;
+        }
+        if (headers[i] === currentJoint) {
+          colspan++;
+        } else {
+          if (currentJoint !== null) {
+            ths += `<th colspan="${colspan}" style="text-align: center;">Joint ${formatCell(currentJoint)}</th>`;
+          }
+          currentJoint = headers[i];
+          colspan = 1;
+        }
+      }
+      if (currentJoint !== null) {
+        ths += `<th colspan="${colspan}" style="text-align: center;">Joint ${formatCell(currentJoint)}</th>`;
+      }
+      
+      const head = ths;
+      
+      const membersRow = rows[0];
+      const dfRow = rows[1];
+      
+      const membersCells = membersRow.map((cell, i) => `<th style="top: 36px; z-index: 3; background: #fafafa;">${i === 0 ? formatCell(cell) : 'Member ' + formatCell(cell)}</th>`).join('');
+      const dfCells = dfRow.map((cell, i) => `<th style="top: 72px; z-index: 3;" class="${i === 0 ? '' : 'mdm-df'}">${formatCell(cell)}</th>`).join('');
+      
+      const dataRows = rows.slice(2).map((row, rIndex) => {
+        let rowClassStr = '';
+        const rowName = String(row[0] || '').toLowerCase();
+        
+        let cycleNum = '';
+        if (rowName.includes('fem')) rowClassStr = 'mdm-fem';
+        else if (rowName.includes('distribution')) {
+            rowClassStr = 'mdm-distribute';
+            cycleNum = rowName.replace(/[^0-9]/g, '');
+        }
+        else if (rowName.includes('carry')) {
+            rowClassStr = 'mdm-carry';
+            cycleNum = rowName.replace(/[^0-9]/g, '');
+        }
+        else if (rowName.includes('end moment')) rowClassStr = 'mdm-final';
+        
+        const rowCells = row.map((cell, cIndex) => {
+          let cellHtml = formatCell(cell);
+          let cellClass = '';
+          
+          if (cIndex > 0) {
+            const val = parseFloat(String(cell).replace(/,/g, ''));
+            if (!isNaN(val)) {
+                if (val > 0) cellClass = 'mdm-pos';
+                else if (val < 0) cellClass = 'mdm-neg';
+                else cellClass = 'mdm-zero';
+            }
+          }
+          
+          let cellIdAttr = '';
+          if (cIndex > 0 && rowName.includes('distribution')) {
+              const memberName = membersRow[cIndex];
+              cellIdAttr = ` id="cell-dist-${cycleNum}-${memberName}"`;
+          } else if (cIndex > 0 && rowName.includes('carry')) {
+              const memberName = membersRow[cIndex];
+              cellIdAttr = ` id="cell-carry-${cycleNum}-${memberName}"`;
+          }
+          
+          return `<td${cellIdAttr} class="${cellClass}">${cellHtml}</td>`;
+        }).join('');
+        
+        return `<tr class="${rowClassStr}">${rowCells}</tr>`;
+      }).join('');
+      
+      return `<table>
+        <thead>
+          <tr>${head}</tr>
+          <tr class="mdm-members">${membersCells}</tr>
+          <tr class="mdm-df-row">${dfCells}</tr>
+        </thead>
+        <tbody>${dataRows}</tbody>
+      </table><svg id="arrow-svg"></svg>`;
+    }
+
+    function setupMdmHover() {
+      const output = document.getElementById('output');
+      const arrowSvg = document.getElementById('arrow-svg');
+      if (!arrowSvg) return;
+      
+      let hoverArrow = null;
+
+      output.addEventListener('mouseover', (e) => {
+        const td = e.target.closest('td');
+        if (!td || !td.id || !td.id.startsWith('cell-carry-')) return;
+        
+        const parts = td.id.split('-');
+        const cycle = parts[2];
+        const member = parts[3];
+        
+        let opp = member.length === 2 ? member[1] + member[0] : null;
+        if (!opp) return;
+        
+        const sourceId = `cell-dist-${cycle}-${opp}`;
+        const sourceTd = document.getElementById(sourceId);
+        
+        if (sourceTd) {
+          sourceTd.classList.add('mdm-carry-hover-source');
+          td.classList.add('mdm-carry-hover-target');
+          
+          const srcRect = sourceTd.getBoundingClientRect();
+          const targetRect = td.getBoundingClientRect();
+          const svgRect = arrowSvg.getBoundingClientRect();
+          
+          const x1 = srcRect.left + srcRect.width / 2 - svgRect.left;
+          const y1 = srcRect.top + srcRect.height / 2 - svgRect.top;
+          const x2 = targetRect.left + targetRect.width / 2 - svgRect.left;
+          const y2 = targetRect.top + targetRect.height / 2 - svgRect.top;
+          
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          path.setAttribute('d', `M ${x1} ${y1} Q ${x1 + dx*0.2} ${y1 + dy*0.8} ${x2} ${y2}`);
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke', '#d97706');
+          path.setAttribute('stroke-width', '2.5');
+          path.setAttribute('stroke-dasharray', '4,4');
+          path.setAttribute('marker-end', 'url(#arrow-orange)');
+          
+          arrowSvg.innerHTML = `
+            <defs>
+              <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#d97706"></path>
+              </marker>
+            </defs>
+          `;
+          arrowSvg.appendChild(path);
+          hoverArrow = { sourceTd, targetTd: td };
+        }
+      });
+      
+      output.addEventListener('mouseout', (e) => {
+        if (hoverArrow) {
+          hoverArrow.sourceTd.classList.remove('mdm-carry-hover-source');
+          hoverArrow.targetTd.classList.remove('mdm-carry-hover-target');
+          arrowSvg.innerHTML = '';
+          hoverArrow = null;
+        }
+      });
     }
 
     function buildTable(headers, rows) {
