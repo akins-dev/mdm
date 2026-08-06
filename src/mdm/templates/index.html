@@ -325,7 +325,13 @@
           <div>
             <label>&nbsp;</label>
             <label><input id="exteriorFixed" type="checkbox"> Exterior supports fixed</label>
-            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">Leave unchecked if exterior supports are pins/rollers (not strictly fixed).</div>
+            <div style="font-size: 11px; color: #cf1322; font-weight: 600; margin-top: 4px;">Leave unchecked if exterior supports are pins/rollers (not strictly fixed).</div>
+            <details style="font-size: 11px; color: var(--text); margin-top: 4px; line-height: 1.5;">
+              <summary style="cursor: pointer; color: #0050b3; font-weight: 600;">Why? (click to expand)</summary>
+              <div style="margin-top: 4px; padding: 6px 8px; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 4px; color: #434343;">
+                In practice, the ends of continuous beams typically rest on columns or walls that allow rotation — these are modelled as <strong>pins or rollers</strong>, not fixed supports. Only check this box if the beam ends are specifically designed as fully rigid connections (e.g. monolithic connections into shear walls or deep foundations) where rotation is physically restrained.
+              </div>
+            </details>
           </div>
         </div>
       </div>
@@ -625,12 +631,24 @@
         typesetMath();
         return;
       }
-      const note = activeTab === 'fem'
-        ? '<p class="formula">Clockwise member-end moments are positive. \\(UDL: M_L=-wL^2/12, M_R=wL^2/12\\). Point load: \\(M_L=-Pab^2/L^2, M_R=Pa^2b/L^2\\), where \\(b=L-a\\).</p>'
-        : activeTab === 'distribution'
-        ? '<p class="formula">Relative stiffness remains \\(k=1/L\\), and \\(DF=k/\\Sigma k\\).</p>'
-        : '';
-      outputEl.innerHTML = note + buildTable(table.headers, table.rows);
+      if (activeTab === 'distribution') {
+        const dfNote = `
+          <div style="font-size: 13px; color: #1f1f1f; margin-top: 14px; line-height: 1.7; background: #f6ffed; padding: 14px 18px; border: 1px solid #b7eb8f; border-radius: 6px;">
+            <strong style="color: #389e0d; font-size: 14px;">ℹ️ Method Note:</strong><br><br>
+            <strong>&bull; Method Used in this Solver — Standard Iterative Method:</strong><br>
+            All joints (including exterior end supports) are initially assumed to be <strong>fixed</strong> (locked against rotation). A uniform relative stiffness of \\(k = 1/L\\) is used for every span, assuming constant flexural rigidity \\(EI\\). Fixed-end moments (FEM) are then calculated for each loaded span as if both of its ends are rigidly clamped.<br>
+            The solver then <em>iteratively unlocks</em> each joint one at a time. At each unlocked joint, the unbalanced moment (the net sum of all member-end moments meeting at that joint) is distributed to the connected members in proportion to their stiffness: \\(DF = k / \\Sigma k\\). Half of each distributed moment (carry-over factor = 0.5) is transmitted to the far end of the member. At a simple end support (pin or roller), only one member frames into the joint, so \\(DF = k/k = 1.0\\) — meaning 100% of any unbalanced moment is released back into the span, enforcing the physical requirement that a pin cannot hold moment (\\(M = 0\\)). At a fixed end support, \\(DF = 0\\) — the rigid wall absorbs all moment and no balancing is needed. This distribute-and-carry-over cycle repeats until the maximum unbalanced moment at any joint falls below the specified tolerance.<br><br>
+            <strong>&bull; Alternative Method — Modified Stiffness Shortcut (Not Used Here):</strong><br>
+            Instead of using \\(k = 1/L\\) for all spans, this method applies a <em>reduced</em> stiffness of \\(k = 3/(4L)\\) to any span whose far end is a simple support (pin or roller). Before the iterative distribution begins, the simple end support is released <em>once</em> to adjust the initial FEMs (the fixed-end moment at the pin is set to zero, and the near-end FEM is modified accordingly). After this initial release, the simple end is assigned \\(DF = 0\\) for all subsequent cycles, so no further balancing or carry-over is needed at that end. This shortcut reduces the number of distribution cycles required, making it more efficient for hand calculations. <strong>Both methods produce identical final bending moments.</strong>
+          </div>
+        `;
+        outputEl.innerHTML = buildTable(table.headers, table.rows) + dfNote;
+      } else if (activeTab === 'fem') {
+        const femNote = '<p class="formula">Clockwise member-end moments are positive. \\(UDL: M_L=-wL^2/12, M_R=wL^2/12\\). Point load: \\(M_L=-Pab^2/L^2, M_R=Pa^2b/L^2\\), where \\(b=L-a\\).</p>';
+        outputEl.innerHTML = femNote + buildTable(table.headers, table.rows);
+      } else {
+        outputEl.innerHTML = buildTable(table.headers, table.rows);
+      }
       typesetMath();
     }
 
@@ -1223,7 +1241,17 @@
              return '';
         };
 
-        reportHtml += renderTableForPrint('distribution', 'Distribution Factors');
+        const printDfNote = `
+          <div style="font-size: 12px; color: #1f1f1f; margin-top: 8px; margin-bottom: 20px; line-height: 1.6; background: #f6ffed; padding: 10px 14px; border: 1px solid #b7eb8f; border-radius: 4px;">
+            <strong style="color: #389e0d;">ℹ️ Method Note:</strong><br><br>
+            <strong>&bull; Method Used — Standard Iterative Method:</strong><br>
+            All joints are initially assumed <strong>fixed</strong> (locked against rotation). A uniform relative stiffness \\(k = 1/L\\) is used for every span (constant \\(EI\\)). FEMs are calculated for each loaded span as if both ends are clamped. The solver then iteratively unlocks each joint, distributes the unbalanced moment using \\(DF = k / \\Sigma k\\), and carries over half (×0.5) to the far end. At simple end supports (pins/rollers), \\(DF = 1.0\\) — 100% of the moment is released, enforcing \\(M = 0\\). At fixed end supports, \\(DF = 0\\) — the wall absorbs all moment. This cycle repeats until equilibrium is reached.<br><br>
+            <strong>&bull; Alternative Method — Modified Stiffness Shortcut (Not Used Here):</strong><br>
+            Uses a reduced stiffness \\(k = 3/(4L)\\) for spans ending at a simple support. The simple end is released once at the start to adjust initial FEMs, then assigned \\(DF = 0\\) for all subsequent cycles — reducing the number of iterations. <strong>Both methods produce identical final bending moments.</strong>
+          </div>
+        `;
+
+        reportHtml += renderTableForPrint('distribution', 'Distribution Factors') + printDfNote;
         reportHtml += renderTableForPrint('fem', 'Fixed-End Moment Calculations');
         reportHtml += renderTableForPrint('moment', 'Moment Distribution');
         
