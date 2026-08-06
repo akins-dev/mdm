@@ -167,7 +167,10 @@
     .table-wrap {
       overflow: auto;
       height: calc(100vh - 126px);
-      padding: 12px;
+      padding: 0 12px 12px 12px;
+    }
+    .table-wrap > *:first-child {
+      margin-top: 12px;
     }
     table {
       border-collapse: collapse;
@@ -182,9 +185,13 @@
       white-space: nowrap;
       vertical-align: top;
     }
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
     th {
       background: #edf2f7;
-      z-index: 2;
     }
     .table-wrap {
       position: relative;
@@ -711,8 +718,8 @@
       const membersRow = rows[0];
       const dfRow = rows[1];
       
-      const membersCells = membersRow.map((cell, i) => `<th style="top: 36px; z-index: 3; background: #fafafa;">${i === 0 ? formatCell(cell) : 'Member ' + formatCell(cell)}</th>`).join('');
-      const dfCells = dfRow.map((cell, i) => `<th style="top: 72px; z-index: 3;" class="${i === 0 ? '' : 'mdm-df'}">${formatCell(cell)}</th>`).join('');
+      const membersCells = membersRow.map((cell, i) => `<th style="background: #fafafa;">${i === 0 ? formatCell(cell) : 'Member ' + formatCell(cell)}</th>`).join('');
+      const dfCells = dfRow.map((cell, i) => `<th class="${i === 0 ? '' : 'mdm-df'}">${formatCell(cell)}</th>`).join('');
       
       const dataRows = rows.slice(2).map((row, rIndex) => {
         let rowClassStr = '';
