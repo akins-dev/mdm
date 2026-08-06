@@ -531,16 +531,7 @@ def analysis_from_final_moments(
                 "Balanced" if abs(shear_closure) < 1e-6 else "Unbalanced",
             ]
         )
-        equilibrium_rows.append(
-            [
-                span.name,
-                "SFD right support closure",
-                "\\(V(L^-)+R_R\\)",
-                f"\\({money(right_before_support)}+{money(right_reaction)}\\)",
-                money(right_after_support),
-                "Balanced" if abs(right_after_support) < 1e-6 else "Unbalanced",
-            ]
-        )
+
 
     support_rows = [[support, money(support_reactions[support])] for support in supports]
     for support in supports:

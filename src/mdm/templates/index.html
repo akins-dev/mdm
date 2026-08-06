@@ -637,21 +637,17 @@
               ${renderFbdCalculations()}
             </div>
             <div>
-              <h2 class="subheading">Support Reaction Summation</h2>
-              ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
-            </div>
-            <div>
               <h2 class="subheading">Span-End Reactions</h2>
               ${buildTable(currentResults.tables.reactions.headers, currentResults.tables.reactions.rows)}
             </div>
             <div>
-              <h2 class="subheading">Total Support Reactions</h2>
-              ${buildTable(currentResults.tables.support_reactions.headers, currentResults.tables.support_reactions.rows)}
+              <h2 class="subheading">Support Reaction Summation</h2>
+              ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
             </div>
             <div>
               <h2 class="subheading">Equilibrium Checks</h2>
               <p class="formula">A zero residual means the check is balanced. Nonzero residuals are shown in red.</p>
-              ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
+              ${renderEquilibriumChecks(currentResults.tables.equilibrium_checks.rows)}
               <div style="font-size: 13px; color: var(--text); margin-top: 10px; line-height: 1.5; background: #e6f7ff; padding: 12px; border: 1px solid #91d5ff; border-radius: 6px;">
                 <strong style="color: #0050b3;">ℹ️ Legend:</strong><br>
                 &bull; \\(R_L\\) = Left Span Reaction, &bull; \\(R_R\\) = Right Span Reaction<br>
@@ -1636,6 +1632,75 @@
       return html;
     }
 
+    function renderEquilibriumChecks(rows) {
+      if (!rows || rows.length === 0) return '<p class="formula">No data.</p>';
+      
+      const grouped = {};
+      for (const row of rows) {
+        const loc = String(row[0] || '').trim();
+        if (!grouped[loc]) grouped[loc] = [];
+        grouped[loc].push(row);
+      }
+      
+      let html = '<div style="display: grid; gap: 16px; margin-bottom: 24px;">';
+      
+      for (const loc in grouped) {
+        const isWhole = loc.toLowerCase().includes('whole');
+        const isJoint = loc.length === 1 && !isWhole;
+        let title = `Span ${escapeHtml(loc)}`;
+        if (isJoint) title = `Joint ${escapeHtml(loc)}`;
+        if (isWhole) title = 'Global Check (Whole Beam)';
+        
+        html += `
+          <div style="background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+            <div style="background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 15px; color: #1e293b;">
+              ${title}
+            </div>
+            <div style="padding: 16px; display: grid; gap: 16px;">
+        `;
+        
+        for (const row of grouped[loc]) {
+          const check = escapeHtml(row[1]);
+          const formulaRaw = escapeHtml(row[2]);
+          const formula = String(formulaRaw).includes('\\(') ? formulaRaw : `\\( ${formulaRaw} \\)`;
+          
+          const substitutionRaw = escapeHtml(row[3]);
+          const substitution = String(substitutionRaw).includes('\\(') ? substitutionRaw : `\\( ${substitutionRaw} \\)`;
+          
+          const residual = escapeHtml(row[4]);
+          const status = escapeHtml(row[5]);
+          
+          const isBalanced = status.toLowerCase().includes('balanced');
+          const statusIcon = isBalanced ? '✅' : '❌';
+          const statusColor = isBalanced ? '#16a34a' : '#dc2626';
+          const bgStyle = isBalanced ? '' : 'background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px; margin: -8px;';
+          
+          html += `
+            <div style="${bgStyle}">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                 <strong style="font-size: 14px; color: #334155;">${check}</strong>
+                 <span style="font-size: 13px; font-weight: 600; color: ${statusColor}; background: ${isBalanced ? '#dcfce7' : '#fee2e2'}; padding: 4px 10px; border-radius: 12px;">${statusIcon} ${status}</span>
+              </div>
+              <div style="font-size: 14px; color: #475569;">
+                <div style="background: #f1f5f9; padding: 10px 14px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                  <div style="flex: 1; min-width: 200px;"><strong style="color:#64748b; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Formula:</strong> <span style="margin-left: 8px;">${formula}</span></div>
+                  <div style="flex: 2; min-width: 250px;"><strong style="color:#64748b; font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Substitution:</strong> <span style="margin-left: 8px;">${substitution} = <strong>${residual}</strong></span></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        
+        html += `
+            </div>
+          </div>
+        `;
+      }
+      
+      html += '</div>';
+      return html;
+    }
+
     function typesetMath() {
       if (window.MathJax && window.MathJax.typesetPromise) {
         window.MathJax.typesetPromise([outputEl]).catch(() => {});
@@ -1780,20 +1845,16 @@
               ${renderFbdCalculations()}
             </div>
             <div>
-              <h4 class="subheading">Support Reaction Summation</h4>
-              ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
-            </div>
-            <div>
               <h4 class="subheading">Span-End Reactions</h4>
               ${buildTable(currentResults.tables.reactions.headers, currentResults.tables.reactions.rows)}
             </div>
             <div>
-              <h4 class="subheading">Total Support Reactions</h4>
-              ${buildTable(currentResults.tables.support_reactions.headers, currentResults.tables.support_reactions.rows)}
+              <h4 class="subheading">Support Reaction Summation</h4>
+              ${renderSupportReactionCalculations(currentResults.tables.support_reaction_calculations.rows)}
             </div>
             <div>
               <h4 class="subheading">Equilibrium Checks</h4>
-              ${buildTable(currentResults.tables.equilibrium_checks.headers, currentResults.tables.equilibrium_checks.rows)}
+              ${renderEquilibriumChecks(currentResults.tables.equilibrium_checks.rows)}
             </div>
           </div>
           <div style="margin-bottom: 30px;"></div>
