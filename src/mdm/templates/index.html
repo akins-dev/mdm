@@ -730,15 +730,27 @@
         const x1 = xScale(span.start);
         const x2 = xScale(span.end);
         const mid = (x1 + x2) / 2;
-        const udlMarkup = (span.udls || []).map(u => {
-          const ux1 = xScale(span.start + u.a);
-          const ux2 = xScale(span.start + u.b);
-          return drawUdl(ux1, ux2, beamY - 72, beamY - 18, `${u.w.toFixed(2)} kN/m`);
-        }).join('');
-        const points = (span.point_loads || []).map(point => {
-          const x = xScale(span.start + Number(point.distance));
-          return drawArrow(x, beamY - 78, x, beamY - 16, '#d97706', `${Number(point.load).toFixed(2)} kN`);
-        }).join('');
+        const hasUdl = span.udls && span.udls.length > 0;
+        let loadsBackgroundHtml = '';
+        let loadsMiddleHtml = '';
+        let loadsForegroundHtml = '';
+
+        if (span.udls) {
+          span.udls.forEach(u => {
+            const ux1 = xScale(span.start + u.a);
+            const ux2 = xScale(span.start + u.b);
+            loadsBackgroundHtml += drawUdl(ux1, ux2, beamY - 72, beamY - 18, `${u.w.toFixed(2)} kN/m`, 'graphics');
+            loadsForegroundHtml += drawUdl(ux1, ux2, beamY - 72, beamY - 18, `${u.w.toFixed(2)} kN/m`, 'text');
+          });
+        }
+
+        if (span.point_loads) {
+          span.point_loads.forEach(point => {
+            const x = xScale(span.start + Number(point.distance));
+            const pointYTop = hasUdl ? beamY - 102 : beamY - 78;
+            loadsMiddleHtml += drawArrow(x, pointYTop, x, beamY - 16, '#d97706', `${Number(point.load).toFixed(2)} kN`);
+          });
+        }
         
         let keyPoints = [0, Number(span.length)];
         if (span.point_loads) span.point_loads.forEach(p => keyPoints.push(Number(p.distance)));
@@ -770,8 +782,9 @@
           <line x1="${x1}" y1="${beamY}" x2="${x2}" y2="${beamY}" stroke="#1b2430" stroke-width="4"></line>
           <text x="${mid - 10}" y="${beamY + 34}">${escapeHtml(span.name)}</text>
           ${dimensionsHtml}
-          ${udlMarkup}
-          ${points}
+          ${loadsBackgroundHtml}
+          ${loadsMiddleHtml}
+          ${loadsForegroundHtml}
         `;
       }).join('');
 
