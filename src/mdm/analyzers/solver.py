@@ -51,9 +51,9 @@ def build_standard_distribution_rows(
     spans: List[Span],
     supports: List[str],
     fixed_supports: set[str],
-) -> Tuple[List[List[str]], Dict[str, float], Dict[str, List[str]], Dict[str, str]]:
+) -> Tuple[List[List[Any]], Dict[str, float], Dict[str, List[str]], Dict[str, str]]:
     rows, distribution_factors, joint_ends, opposite = build_distribution_rows(spans, supports, fixed_supports)
-    standard_rows: List[List[str]] = []
+    standard_rows: List[List[Any]] = []
     joint_counts = {}
     for r in rows:
         joint_counts[r[0]] = joint_counts.get(r[0], 0) + 1
@@ -255,7 +255,7 @@ def span_station_candidates(span: Span, final_moments: Dict[str, float], left_re
     return sorted(candidates)
 
 
-def diagram_points(span: Span, final_moments: Dict[str, float], left_reaction: float, global_start: float) -> Tuple[List[Dict[str, object]], List[Dict[str, object]]]:
+def diagram_points(span: Span, final_moments: Dict[str, float], left_reaction: float, global_start: float) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     x_values = {0.0, span.length}
     key_x_values = set(span_station_candidates(span, final_moments, left_reaction))
     x_values.update(key_x_values)
@@ -296,7 +296,7 @@ def analysis_from_final_moments(
     spans: List[Span],
     supports: List[str],
     final_moments: Dict[str, float],
-) -> Dict[str, object]:
+) -> Dict[str, Any]:
     reaction_rows: List[List[str]] = []
     reaction_calc_rows: List[List[str]] = []
     support_reaction_calc_rows: List[List[str]] = []
@@ -304,13 +304,13 @@ def analysis_from_final_moments(
     bending_calc_rows: List[List[str]] = []
     extrema_rows: List[List[str]] = []
     equilibrium_rows: List[List[str]] = []
-    zero_shear_calcs: List[Dict[str, object]] = []
+    zero_shear_calcs: List[Dict[str, Any]] = []
     support_reactions = {support: 0.0 for support in supports}
     support_reaction_parts = {support: [] for support in supports}
-    shear_points: List[Dict[str, object]] = []
-    moment_points: List[Dict[str, object]] = []
-    support_positions: List[Dict[str, object]] = []
-    span_infos: List[Dict[str, object]] = []
+    shear_points: List[Dict[str, Any]] = []
+    moment_points: List[Dict[str, Any]] = []
+    support_positions: List[Dict[str, Any]] = []
+    span_infos: List[Dict[str, Any]] = []
     joint_ends: Dict[str, List[str]] = {support: [] for support in supports}
     
     # Note: For free ends, span.left or span.right might not be in `supports`
