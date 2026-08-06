@@ -211,12 +211,16 @@
     .mdm-distribute td { background-color: #ffffff; }
     .mdm-carry td { background-color: #fafafa; border-bottom: 1px solid #e2e8f0; }
     .mdm-carry td[id] { cursor: pointer; }
+    .mdm-distribute td[id] { cursor: pointer; }
     .mdm-final td { border-top: 3px double #16202a; font-weight: bold; background-color: #f8fafc; }
     .mdm-pos { color: #027a48; }
     .mdm-neg { color: #b42318; }
     .mdm-zero { color: #94a3b8; }
     .mdm-carry-hover-source { background-color: #fef0c7 !important; transition: background-color 0.1s; }
     .mdm-carry-hover-target { background-color: #fdb022 !important; transition: background-color 0.1s; }
+    .mdm-dist-hover-target { background-color: #d1f4e0 !important; transition: background-color 0.1s; }
+    .mdm-dist-hover-source { background-color: #fef0c7 !important; transition: background-color 0.1s; }
+    .mdm-dist-hover-df { background-color: #e0f2fe !important; transition: background-color 0.1s; }
     .formula {
       margin: 0 0 10px;
       color: var(--muted);
@@ -719,7 +723,11 @@
       const dfRow = rows[1];
       
       const membersCells = membersRow.map((cell, i) => `<th style="background: #fafafa;">${i === 0 ? formatCell(cell) : 'Member ' + formatCell(cell)}</th>`).join('');
-      const dfCells = dfRow.map((cell, i) => `<th class="${i === 0 ? '' : 'mdm-df'}">${formatCell(cell)}</th>`).join('');
+      const dfCells = dfRow.map((cell, i) => {
+          const memberName = i > 0 ? membersRow[i] : '';
+          const idAttr = i > 0 ? ` id="cell-df-${memberName}"` : '';
+          return `<th${idAttr} class="${i === 0 ? '' : 'mdm-df'}">${formatCell(cell)}</th>`;
+      }).join('');
       
       const dataRows = rows.slice(2).map((row, rIndex) => {
         let rowClassStr = '';
@@ -751,9 +759,14 @@
           }
           
           let cellIdAttr = '';
-          if (cIndex > 0 && rowName.includes('distribution')) {
+          if (cIndex > 0 && rowName.includes('fem')) {
               const memberName = membersRow[cIndex];
-              cellIdAttr = ` id="cell-dist-${cycleNum}-${memberName}"`;
+              cellIdAttr = ` id="cell-fem-${memberName}"`;
+          } else if (cIndex > 0 && rowName.includes('distribution')) {
+              const memberName = membersRow[cIndex];
+              const jointName = headers[cIndex];
+              const val = parseFloat(String(cell).replace(/,/g, ''));
+              cellIdAttr = ` id="cell-dist-${cycleNum}-${memberName}" data-joint="${jointName}" data-member="${memberName}" data-cycle="${cycleNum}" data-val="${isNaN(val)?'':val}"`;
           } else if (cIndex > 0 && rowName.includes('carry')) {
               const memberName = membersRow[cIndex];
               cellIdAttr = ` id="cell-carry-${cycleNum}-${memberName}"`;
@@ -780,66 +793,162 @@
       const arrowSvg = document.getElementById('arrow-svg');
       if (!arrowSvg) return;
       
-      let hoverArrow = null;
+      let hoverState = null;
 
       output.addEventListener('mouseover', (e) => {
         const td = e.target.closest('td');
-        if (!td || !td.id || !td.id.startsWith('cell-carry-')) return;
+        if (!td || !td.id) return;
         
-        const parts = td.id.split('-');
-        const cycle = parts[2];
-        const member = parts[3];
+        // --- Carry-Over Logic ---
+        if (td.id.startsWith('cell-carry-')) {
+          const parts = td.id.split('-');
+          const cycle = parts[2];
+          const member = parts[3];
+          
+          let opp = member.length === 2 ? member[1] + member[0] : null;
+          if (!opp) return;
+          
+          const sourceId = `cell-dist-${cycle}-${opp}`;
+          const sourceTd = document.getElementById(sourceId);
+          
+          if (sourceTd) {
+            sourceTd.classList.add('mdm-carry-hover-source');
+            td.classList.add('mdm-carry-hover-target');
+            
+            const srcRect = sourceTd.getBoundingClientRect();
+            const targetRect = td.getBoundingClientRect();
+            const svgRect = arrowSvg.getBoundingClientRect();
+            
+            const x1 = srcRect.left + srcRect.width / 2 - svgRect.left;
+            const y1 = srcRect.top + srcRect.height / 2 - svgRect.top;
+            const x2 = targetRect.left + targetRect.width / 2 - svgRect.left;
+            const y2 = targetRect.top + targetRect.height / 2 - svgRect.top;
+            
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const cx = x1 + dx * 0.2;
+            const cy = y1 + dy * 0.8;
+            const mx = 0.25 * x1 + 0.5 * cx + 0.25 * x2;
+            const my = 0.25 * y1 + 0.5 * cy + 0.25 * y2;
+            
+            arrowSvg.innerHTML = `
+              <defs>
+                <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#d97706"></path>
+                </marker>
+              </defs>
+              <path d="M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}" 
+                    fill="none" stroke="#d97706" stroke-width="2.5" 
+                    stroke-dasharray="4,4" marker-end="url(#arrow-orange)" />
+              <g transform="translate(${mx}, ${my})">
+                <rect x="-18" y="-10" width="36" height="20" rx="10" fill="#fff" stroke="#d97706" stroke-width="1.5" />
+                <text x="0" y="1" dominant-baseline="middle" text-anchor="middle" font-size="11" font-weight="bold" fill="#d97706">×0.5</text>
+              </g>
+            `;
+            hoverState = { type: 'carry', source: [sourceTd], target: td };
+          }
+        }
         
-        let opp = member.length === 2 ? member[1] + member[0] : null;
-        if (!opp) return;
-        
-        const sourceId = `cell-dist-${cycle}-${opp}`;
-        const sourceTd = document.getElementById(sourceId);
-        
-        if (sourceTd) {
-          sourceTd.classList.add('mdm-carry-hover-source');
-          td.classList.add('mdm-carry-hover-target');
+        // --- Distribution Logic ---
+        else if (td.id.startsWith('cell-dist-')) {
+          const joint = td.getAttribute('data-joint');
+          const member = td.getAttribute('data-member');
+          const cycleStr = td.getAttribute('data-cycle');
+          const cycleNum = parseInt(cycleStr, 10);
           
-          const srcRect = sourceTd.getBoundingClientRect();
-          const targetRect = td.getBoundingClientRect();
-          const svgRect = arrowSvg.getBoundingClientRect();
+          if (!joint || !member || isNaN(cycleNum)) return;
           
-          const x1 = srcRect.left + srcRect.width / 2 - svgRect.left;
-          const y1 = srcRect.top + srcRect.height / 2 - svgRect.top;
-          const x2 = targetRect.left + targetRect.width / 2 - svgRect.left;
-          const y2 = targetRect.top + targetRect.height / 2 - svgRect.top;
+          const dfTd = document.getElementById(`cell-df-${member}`);
           
-          const dx = x2 - x1;
-          const dy = y2 - y1;
-          const cx = x1 + dx * 0.2;
-          const cy = y1 + dy * 0.8;
-          const mx = 0.25 * x1 + 0.5 * cx + 0.25 * x2;
-          const my = 0.25 * y1 + 0.5 * cy + 0.25 * y2;
+          const sourceCells = [];
           
-          arrowSvg.innerHTML = `
-            <defs>
-              <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8 Z" fill="#d97706"></path>
-              </marker>
-            </defs>
-            <path d="M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}" 
-                  fill="none" stroke="#d97706" stroke-width="2.5" 
-                  stroke-dasharray="4,4" marker-end="url(#arrow-orange)" />
-            <g transform="translate(${mx}, ${my})">
-              <rect x="-18" y="-10" width="36" height="20" rx="10" fill="#fff" stroke="#d97706" stroke-width="1.5" />
-              <text x="0" y="1" dominant-baseline="middle" text-anchor="middle" font-size="11" font-weight="bold" fill="#d97706">×0.5</text>
-            </g>
-          `;
-          hoverArrow = { sourceTd, targetTd: td };
+          const tdList = Array.from(output.querySelectorAll('td'));
+          tdList.forEach(cell => {
+             const cid = cell.id || '';
+             if (cycleNum === 1) {
+                 if (cid.startsWith('cell-fem-')) {
+                     const m = cid.split('-')[2];
+                     if (m && m[0] === joint) sourceCells.push(cell);
+                 }
+             } else {
+                 if (cid.startsWith(`cell-carry-${cycleNum-1}-`)) {
+                     const m = cid.split('-')[3];
+                     if (m && m[0] === joint) sourceCells.push(cell);
+                 }
+             }
+          });
+          
+          if (dfTd && sourceCells.length > 0) {
+            dfTd.classList.add('mdm-dist-hover-df');
+            td.classList.add('mdm-dist-hover-target');
+            
+            sourceCells.forEach(c => {
+                c.classList.add('mdm-dist-hover-source');
+            });
+            
+            const dfValText = dfTd.innerText || '0';
+            
+            const svgRect = arrowSvg.getBoundingClientRect();
+            const targetRect = td.getBoundingClientRect();
+            const tx = targetRect.left + targetRect.width / 2 - svgRect.left;
+            const ty = targetRect.top + targetRect.height / 2 - svgRect.top;
+            
+            let svgHtml = `
+              <defs>
+                <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                  <path d="M0,0 L8,4 L0,8 Z" fill="#0284c7"></path>
+                </marker>
+              </defs>
+            `;
+            
+            sourceCells.forEach(c => {
+                const srcRect = c.getBoundingClientRect();
+                const sx = srcRect.left + srcRect.width / 2 - svgRect.left;
+                const sy = srcRect.top + srcRect.height / 2 - svgRect.top;
+                svgHtml += `<path d="M ${sx} ${sy} C ${sx} ${sy + 30}, ${tx} ${ty - 30}, ${tx} ${ty}" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="3,3" />`;
+            });
+            
+            const dfRect = dfTd.getBoundingClientRect();
+            const dx = dfRect.left + dfRect.width / 2 - svgRect.left;
+            const dy = dfRect.top + dfRect.height / 2 - svgRect.top;
+            
+            svgHtml += `<path d="M ${dx} ${dy} L ${tx} ${ty}" fill="none" stroke="#0284c7" stroke-width="2.5" stroke-dasharray="4,4" marker-end="url(#arrow-blue)" />`;
+            
+            const pillY = ty - 25;
+            let sumStr = sourceCells.map(c => c.innerText.trim()).join(' + ');
+            if (sourceCells.length > 1) {
+                sumStr = `(${sumStr})`;
+            }
+            const distVal = td.innerText.trim();
+            const eqStr = `- ${sumStr} × ${dfValText} = ${distVal}`;
+            
+            const pillW = eqStr.length * 6.5 + 20;
+            
+            svgHtml += `
+              <g transform="translate(${tx}, ${pillY})">
+                <rect x="${-pillW/2}" y="-12" width="${pillW}" height="24" rx="12" fill="#fff" stroke="#0284c7" stroke-width="1.5" />
+                <text x="0" y="1" dominant-baseline="middle" text-anchor="middle" font-size="11" font-weight="bold" fill="#0284c7">${eqStr}</text>
+              </g>
+            `;
+            
+            arrowSvg.innerHTML = svgHtml;
+            hoverState = { type: 'dist', source: sourceCells, df: dfTd, target: td };
+          }
         }
       });
       
       output.addEventListener('mouseout', (e) => {
-        if (hoverArrow) {
-          hoverArrow.sourceTd.classList.remove('mdm-carry-hover-source');
-          hoverArrow.targetTd.classList.remove('mdm-carry-hover-target');
+        if (hoverState) {
+          if (hoverState.type === 'carry') {
+              hoverState.source[0].classList.remove('mdm-carry-hover-source');
+              hoverState.target.classList.remove('mdm-carry-hover-target');
+          } else if (hoverState.type === 'dist') {
+              hoverState.source.forEach(c => c.classList.remove('mdm-dist-hover-source'));
+              hoverState.df.classList.remove('mdm-dist-hover-df');
+              hoverState.target.classList.remove('mdm-dist-hover-target');
+          }
           arrowSvg.innerHTML = '';
-          hoverArrow = null;
+          hoverState = null;
         }
       });
     }
