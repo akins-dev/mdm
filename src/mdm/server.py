@@ -298,20 +298,15 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
 
                     envelope_tasks = []
                     
-                    combined_notes = [
-                        "Top reinforcement is designed using the maximum negative (hogging) moment from the envelope.",
-                        "Bottom reinforcement is designed using the maximum positive (sagging) moment from the envelope.",
-                        "Stirrups are designed using the maximum shear force from the shear envelope.",
-                        "This ensures the beam is safe under all possible loading arrangements, not just one."
-                    ]
+                    combined_notes = None
                     
                     if max_pos_task:
                         task_pos = {
-                            "name": "Global Envelope - Maximum Positive (Sagging) Moment",
+                            "name": "Maximum Positive (Sagging) Moment",
                             "M": max_pos_task["M"],
                             "V": global_V,
                             "is_support": False,
-                            "highlight_title": "DESIGN FOR MAXIMUM SAGGING VALUES",
+                            "highlight_title": "",
                             "bg_color": "",
                             "show_position": True,
                             "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
@@ -324,11 +319,11 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
 
                     if max_neg_task:
                         task_neg = {
-                            "name": "Global Envelope - Maximum Negative (Hogging) Moment",
+                            "name": "Maximum Negative (Hogging) Moment",
                             "M": max_neg_task["M"],
                             "V": global_V,
                             "is_support": True,
-                            "highlight_title": "DESIGN FOR MAXIMUM HOGGING VALUES",
+                            "highlight_title": "",
                             "bg_color": "",
                             "show_position": True,
                             "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
@@ -343,32 +338,36 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                     if task_pos and task_neg:
                         if abs(task_pos["M"]) >= abs(task_neg["M"]):
                             task_pos["name"] += " [OVERALL MAX]"
-                            task_pos["highlight_title"] += " [OVERALL MAX]"
+                            task_pos["highlight_title"] = "OVERALL MAX"
                             task_pos["notes"] = combined_notes
                             task_pos["bg_color"] = "#f0fdf4"
                             task_pos["is_overall_max"] = True
+                            
+                            task_neg["highlight_title"] = ""
                             task_neg["bg_color"] = "#fffbeb"
                             task_neg["is_overall_max"] = False
                             envelope_tasks = [task_pos, task_neg]
                         else:
                             task_neg["name"] += " [OVERALL MAX]"
-                            task_neg["highlight_title"] += " [OVERALL MAX]"
+                            task_neg["highlight_title"] = "OVERALL MAX"
                             task_neg["notes"] = combined_notes
                             task_neg["bg_color"] = "#f0fdf4"
                             task_neg["is_overall_max"] = True
+                            
+                            task_pos["highlight_title"] = ""
                             task_pos["bg_color"] = "#fffbeb"
                             task_pos["is_overall_max"] = False
                             envelope_tasks = [task_neg, task_pos]
                     elif task_pos:
                         task_pos["name"] += " [OVERALL MAX]"
-                        task_pos["highlight_title"] += " [OVERALL MAX]"
+                        task_pos["highlight_title"] = "OVERALL MAX"
                         task_pos["notes"] = combined_notes
                         task_pos["bg_color"] = "#f0fdf4"
                         task_pos["is_overall_max"] = True
                         envelope_tasks = [task_pos]
                     elif task_neg:
                         task_neg["name"] += " [OVERALL MAX]"
-                        task_neg["highlight_title"] += " [OVERALL MAX]"
+                        task_neg["highlight_title"] = "OVERALL MAX"
                         task_neg["notes"] = combined_notes
                         task_neg["bg_color"] = "#f0fdf4"
                         task_neg["is_overall_max"] = True
@@ -455,6 +454,17 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                         individual_reports.append(report["html"])
                 
                 # Assemble final reports list
+                
+                # 0. Global Envelope Banner
+                if overall_max_reports or other_envelope_reports or shear_detailing_html:
+                    global_banner = """
+                    <div style='margin: 0 0 24px; padding: 20px; background: #0f172a; color: #fff; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border-top: 4px solid #3b82f6;'>
+                        <h2 style='margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 1px; color: #f8fafc;'>GLOBAL ENVELOPE DESIGN</h2>
+                        <p style='margin: 8px 0 0; font-size: 0.95rem; color: #cbd5e1;'>Uniform, worst-case reinforcement layout safe for all possible load combinations.</p>
+                    </div>
+                    """
+                    reports.append(global_banner)
+
                 # 1. Overall max (shown open)
                 for r in overall_max_reports:
                     reports.append(r)
@@ -473,16 +483,20 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 if shear_detailing_html:
                     reports.append(shear_detailing_html)
                 
-                # 4. Individual span & support designs (collapsed)
+                # 4. Individual span & support designs (un-collapsed)
                 if individual_reports:
-                    indiv_html = "<details style='margin-top: 20px;'>"
-                    indiv_html += "<summary style='cursor: pointer; font-weight: 700; font-size: 1rem; padding: 10px 15px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; color: #334155;'>Individual Span & Support Designs (Click to expand)</summary>"
-                    indiv_html += "<div style='margin-top: 10px;'>"
-                    indiv_html += "<p style='color: #64748b; font-style: italic; margin-bottom: 15px;'>Calculated using their original, individual shear forces</p>"
+                    demarcation_html = """
+                    <div style='margin: 48px 0 24px; position: relative; text-align: center;'>
+                        <div style='position: absolute; top: 50%; left: 0; right: 0; border-top: 2px dashed #cbd5e1; z-index: 1;'></div>
+                        <div style='position: relative; z-index: 2; display: inline-block; background: #fff; padding: 0 24px; border-radius: 99px;'>
+                            <h3 style='margin: 0; color: #0f172a; font-size: 1.1rem; font-weight: 700; letter-spacing: 1px;'>INDIVIDUAL SPAN & SUPPORT DESIGNS</h3>
+                            <p style='margin: 4px 0 0; color: #64748b; font-size: 0.9rem; font-style: italic;'>Calculated using their original, individual shear forces</p>
+                        </div>
+                    </div>
+                    """
+                    reports.append(demarcation_html)
                     for r in individual_reports:
-                        indiv_html += r
-                    indiv_html += "</div></details>"
-                    reports.append(indiv_html)
+                        reports.append(r)
                             
                 self.send_json(200, {"reports": reports})
             except Exception as error:
