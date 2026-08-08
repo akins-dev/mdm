@@ -312,7 +312,7 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                             "V": global_V,
                             "is_support": False,
                             "highlight_title": "DESIGN FOR MAXIMUM SAGGING VALUES",
-                            "bg_color": "#f0fdf4",
+                            "bg_color": "",
                             "show_position": True,
                             "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
                             "support_cond": support_cond,
@@ -329,7 +329,7 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                             "V": global_V,
                             "is_support": True,
                             "highlight_title": "DESIGN FOR MAXIMUM HOGGING VALUES",
-                            "bg_color": "#fffbeb",
+                            "bg_color": "",
                             "show_position": True,
                             "span_length_mm": max([t.get("span_length_mm", 0.0) for t in span_tasks] + [0.0]),
                             "support_cond": support_cond,
@@ -339,26 +339,39 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                     else:
                         task_neg = None
 
+                    # Assign green bg to the overall max, amber to the other
                     if task_pos and task_neg:
                         if abs(task_pos["M"]) >= abs(task_neg["M"]):
                             task_pos["name"] += " [OVERALL MAX]"
                             task_pos["highlight_title"] += " [OVERALL MAX]"
                             task_pos["notes"] = combined_notes
+                            task_pos["bg_color"] = "#f0fdf4"
+                            task_pos["is_overall_max"] = True
+                            task_neg["bg_color"] = "#fffbeb"
+                            task_neg["is_overall_max"] = False
                             envelope_tasks = [task_pos, task_neg]
                         else:
                             task_neg["name"] += " [OVERALL MAX]"
                             task_neg["highlight_title"] += " [OVERALL MAX]"
                             task_neg["notes"] = combined_notes
+                            task_neg["bg_color"] = "#f0fdf4"
+                            task_neg["is_overall_max"] = True
+                            task_pos["bg_color"] = "#fffbeb"
+                            task_pos["is_overall_max"] = False
                             envelope_tasks = [task_neg, task_pos]
                     elif task_pos:
                         task_pos["name"] += " [OVERALL MAX]"
                         task_pos["highlight_title"] += " [OVERALL MAX]"
                         task_pos["notes"] = combined_notes
+                        task_pos["bg_color"] = "#f0fdf4"
+                        task_pos["is_overall_max"] = True
                         envelope_tasks = [task_pos]
                     elif task_neg:
                         task_neg["name"] += " [OVERALL MAX]"
                         task_neg["highlight_title"] += " [OVERALL MAX]"
                         task_neg["notes"] = combined_notes
+                        task_neg["bg_color"] = "#f0fdf4"
+                        task_neg["is_overall_max"] = True
                         envelope_tasks = [task_neg]
 
                     for env_task in reversed(envelope_tasks):
@@ -376,6 +389,12 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 env_area_prov = 0.0
                 env_Asc_req = 0.0
                 env_d = 0.0
+                
+                # Separate reports into categories
+                overall_max_reports = []  # shown open
+                other_envelope_reports = []  # collapsed by default
+                individual_reports = []  # collapsed by default
+                shear_detailing_html = ""
 
                 for t in all_tasks:
                     is_env = t.get("is_envelope", False)
@@ -396,7 +415,6 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                         skip_drawing=is_env,
                         is_uplifted=t.get("is_uplifted", False)
                     )
-                    reports.append(report["html"])
                     
                     if is_env:
                         processed_envs += 1
@@ -415,9 +433,14 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                             bot_dia_c = report["dia_c"]
                             env_area_prov = max(env_area_prov, report["area_prov"])
                             env_Asc_req = max(env_Asc_req, report["Asc_req"])
+                        
+                        if t.get("is_overall_max"):
+                            overall_max_reports.append(report["html"])
+                        else:
+                            other_envelope_reports.append(report["html"])
                             
                         if processed_envs == env_count:
-                            shear_html = shear_and_drawing_section(
+                            shear_detailing_html = shear_and_drawing_section(
                                 name="Global Envelope - Shear & Detailing",
                                 V=global_V, b=b, h=h, d=env_d, cover=cover, fcu=fcu, fyv=fyv,
                                 area_prov=env_area_prov, Asc_req=env_Asc_req, link_dia=link_dia,
@@ -428,18 +451,38 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                                 highlight_title="GLOBAL SHEAR & DETAILING",
                                 bg_color="#f8fafc"
                             )
-                            reports.append(shear_html)
-                            
-                            demarcation_html = """
-                            <div style='margin: 48px 0 24px; position: relative; text-align: center;'>
-                                <div style='position: absolute; top: 50%; left: 0; right: 0; border-top: 2px dashed #cbd5e1; z-index: 1;'></div>
-                                <div style='position: relative; z-index: 2; display: inline-block; background: #fff; padding: 0 24px; border-radius: 99px;'>
-                                    <h3 style='margin: 0; color: #0f172a; font-size: 1.1rem; font-weight: 700; letter-spacing: 1px;'>INDIVIDUAL SPAN & SUPPORT DESIGNS</h3>
-                                    <p style='margin: 4px 0 0; color: #64748b; font-size: 0.9rem; font-style: italic;'>Calculated using their original, individual shear forces</p>
-                                </div>
-                            </div>
-                            """
-                            reports.append(demarcation_html)
+                    else:
+                        individual_reports.append(report["html"])
+                
+                # Assemble final reports list
+                # 1. Overall max (shown open)
+                for r in overall_max_reports:
+                    reports.append(r)
+                
+                # 2. Other envelope design (collapsed)
+                if other_envelope_reports:
+                    other_env_html = "<details style='margin-top: 20px; margin-bottom: 20px;'>"
+                    other_env_html += "<summary style='cursor: pointer; font-weight: 700; font-size: 1rem; padding: 10px 15px; background: #fffbeb; border: 1px solid #fbbf24; border-radius: 6px; color: #92400e;'>Other Envelope Design (Click to expand)</summary>"
+                    other_env_html += "<div style='margin-top: 10px;'>"
+                    for r in other_envelope_reports:
+                        other_env_html += r
+                    other_env_html += "</div></details>"
+                    reports.append(other_env_html)
+
+                # 3. Global shear & detailing (shown open)
+                if shear_detailing_html:
+                    reports.append(shear_detailing_html)
+                
+                # 4. Individual span & support designs (collapsed)
+                if individual_reports:
+                    indiv_html = "<details style='margin-top: 20px;'>"
+                    indiv_html += "<summary style='cursor: pointer; font-weight: 700; font-size: 1rem; padding: 10px 15px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; color: #334155;'>Individual Span & Support Designs (Click to expand)</summary>"
+                    indiv_html += "<div style='margin-top: 10px;'>"
+                    indiv_html += "<p style='color: #64748b; font-style: italic; margin-bottom: 15px;'>Calculated using their original, individual shear forces</p>"
+                    for r in individual_reports:
+                        indiv_html += r
+                    indiv_html += "</div></details>"
+                    reports.append(indiv_html)
                             
                 self.send_json(200, {"reports": reports})
             except Exception as error:

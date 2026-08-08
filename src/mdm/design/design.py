@@ -126,7 +126,7 @@ def design_section(
         header_text += f" - <span style='background-color: #f59e0b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold;'>{highlight_title}</span>"
         
     html_lines.append(f"<h4>{header_text}</h4>")
-    html_lines.append("<p class='text-sm text-gray-600 mb-2'><b>Note:</b> Section designed strictly as a Rectangular Beam (per Oyenuga). Partial safety factor for steel \\(\\gamma_m = 1.05\\), hence using \\(0.95 f_y\\) instead of \\(0.87 f_y\\).</p>")
+    html_lines.append("<p class='text-sm text-gray-600 mb-2'><b>Note:</b> Section designed strictly as a Rectangular Beam (per Oyenuga).</p>")
     
     if notes:
         html_lines.append("<div class='mb-6' style='background: linear-gradient(135deg, #1e293b, #0f172a); color: #f8fafc; border-radius: 8px; padding: 20px 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); font-size: 0.95em; border-left: 4px solid #3b82f6;'>")
@@ -168,7 +168,7 @@ def design_section(
     
     html_lines.append(row(
         bs8110.REF_EFFECTIVE_DEPTH,
-        f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Section Properties</div><p>\\( d = h - c - \\phi_v - \\frac{{\\phi}}{{2}} = {fmt(h)} - {fmt(cover)} - {fmt(link_dia)} - {fmt(main_bar_dia/2)} = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = c + \\phi_v + \\frac{{\\phi}}{{2}} = {fmt(cover)} + {fmt(link_dia)} + {fmt(main_bar_dia/2)} = {money(d_prime)} \\text{{ mm}} \\)</p>",
+        f"<h3 class='calc-section-title'>Section Properties</h3><p>\\( d = h - c - \\phi_v - \\frac{{\\phi}}{{2}} = {fmt(h)} - {fmt(cover)} - {fmt(link_dia)} - {fmt(main_bar_dia/2)} = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = c + \\phi_v + \\frac{{\\phi}}{{2}} = {fmt(cover)} + {fmt(link_dia)} + {fmt(main_bar_dia/2)} = {money(d_prime)} \\text{{ mm}} \\)</p>",
         f"\\( d = {money(d)} \\text{{ mm}} \\)<br/>\\( d' = {money(d_prime)} \\text{{ mm}} \\)"
     ))
     
@@ -178,7 +178,7 @@ def design_section(
     reinforcement_type_str = "<b>Singly Reinforced</b> \\( (M \\le M_u) \\)" if M_abs <= Mu else "<b>Doubly Reinforced</b> \\( (M > M_u) \\)"
     html_lines.append(row(
         bs8110.REF_ULTIMATE_MOMENT,
-        f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Flexural Design</div><p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p><p>{reinforcement_type_str}</p>",
+        f"<h3 class='calc-section-title'>Flexural Design</h3><p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p><p>{reinforcement_type_str}</p>",
         f"\\( M_u = {money(Mu)} \\text{{ kNm}} \\)<br/><br/>{comp_msg}"
     ))
     
@@ -200,7 +200,7 @@ def design_section(
         z_val = d * (0.5 + math.sqrt(abs(0.25 - K / 0.9)))
         z = min(z_val, 0.95 * d)
         
-        calc_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Neutral Axis check</div><p>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>"
+        calc_str = f"<h3 class='calc-section-title'>Neutral Axis check</h3><p>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>"
         calc_str += f"\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)<br/>"
         calc_str += f"\\( z \\le 0.95d \\Rightarrow z \\le {money(0.95 * d)} \\text{{ mm}} \\)<br/>"
         
@@ -223,7 +223,7 @@ def design_section(
         x = (d - z) / 0.45
         d_prime_over_x = d_prime / x
         
-        calc_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Neutral Axis check</div><p>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K'}}{{0.9}}}} \\right] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
+        calc_str = f"<h3 class='calc-section-title'>Neutral Axis check</h3><p>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K'}}{{0.9}}}} \\right] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
         
         calc_str += f"<p>\\( d'/x = {money(d_prime_over_x)} \\). "
         if d_prime_over_x <= bs8110.LIMIT_D_PRIME_X:
@@ -287,13 +287,13 @@ def design_section(
     if layer_counts:
         count = sum(layer_counts)
         layers_str = f" in {len(layer_counts)} layers" if len(layer_counts) > 1 else ""
-        bar_out = f"Provide {count}Y{dia}{layers_str}{tension_loc}<br/>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)"
+        bar_out = f"<div class='final-answer-box'>Provide {count}Y{dia}{layers_str}{tension_loc}<br/><span class='calc-muted' style='margin: 0'>\\( (A_s = {money(area_prov)} \\text{{ mm}}^2) \\)</span></div>"
     else:
         bar_str += f"<p>Cannot fit required reinforcement in 2 layers. Provide \\( A_s \\ge {money(As_req)} \\text{{ mm}}^2 \\) in multiple layers.</p>"
         area_prov = As_req
         dia = main_bar_dia
         layer_counts = []
-        bar_out = f"Multiple layers{tension_loc}"
+        bar_out = f"<div class='final-answer-box'>Multiple layers{tension_loc}</div>"
         
     layer_counts_c = []
     dia_c = main_bar_dia
@@ -304,10 +304,10 @@ def design_section(
         if layer_counts_c:
             count_c = sum(layer_counts_c)
             layers_c_str = f" in {len(layer_counts_c)} layers" if len(layer_counts_c) > 1 else ""
-            bar_out += f"<br/><br/>Provide {count_c}Y{dia_c}{layers_c_str}{compression_loc}<br/>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)"
+            bar_out += f"<br/><br/><div class='final-answer-box'>Provide {count_c}Y{dia_c}{layers_c_str}{compression_loc}<br/><span class='calc-muted' style='margin: 0'>\\( (A'_{{sc}} = {money(area_prov_c)} \\text{{ mm}}^2) \\)</span></div>"
         else:
             bar_str += f"<p>Provide Compression Steel \\( A'_{{sc}} \\ge {money(Asc_req)} \\text{{ mm}}^2 \\).</p>"
-            bar_out += f"<br/><br/>Multiple layers{compression_loc}"
+            bar_out += f"<br/><br/><div class='final-answer-box'>Multiple layers{compression_loc}</div>"
             
     html_lines.append(row("", bar_str, bar_out))
             
@@ -317,7 +317,7 @@ def design_section(
         min_spacing = max(dia, 25.0)
         b_req = 2 * cover + 2 * link_dia + outer_count * dia + (outer_count - 1) * min_spacing
         
-        min_spacing_calc_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Spacing Check</div>"
+        min_spacing_calc_str = f"<h3 class='calc-section-title'>Spacing Check</h3>"
         min_spacing_calc_str += f"spacing = bar diameter (\\( \\phi \\)) or \\( h_{{agg}} + 5 \\), whichever is greater.<br/>"
         min_spacing_calc_str += f"spacing = {fmt(dia)} or {20 + 5} = {fmt(min_spacing)} mm<br/>"
         
@@ -344,7 +344,7 @@ def design_section(
         if span_length > 0:
             html_lines.append(row(
                 bs8110.REF_DEFLECTION_BASIC,
-                "<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Deflection Check</div>"
+                "<h3 class='calc-section-title'>Deflection Check</h3>"
                 "<p>This span is entirely in hogging — the beam deflects <b>upward</b> (camber). "
                 "The standard span/effective-depth check per Table 3.9 & 3.10 is based on sagging tension steel "
                 "and does not apply to uplifted spans.<br/>"
@@ -376,7 +376,7 @@ def design_section(
         allowable_span_d = basic_span_d * mf
         actual_span_d = span_length / d
         
-        defl_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Deflection Check ({support_cond})</div><p>"
+        defl_str = f"<h3 class='calc-section-title'>Deflection Check ({support_cond})</h3><p>"
         defl_str += f"\\( f_s = \\frac{{2 f_y A_{{s,req}}}}{{3 A_{{s,prov}}}} = \\frac{{2 \\times {fmt(fy)} \\times {money(As_req_flexure)}}}{{3 \\times {money(area_prov)}}} = {money(fs)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"\\( \\frac{{M}}{{bd^2}} = {money(M_bd2)} \\text{{ N/mm}}^2 \\)<br/>"
         defl_str += f"M.F. = \\( 0.55 + \\frac{{477 - {money(fs)}}}{{120(0.9 + {money(M_bd2)})}} = {money(mf_calc)} \\le 2.0 \\) (Use {money(mf)})<br/>"
@@ -401,7 +401,7 @@ def design_section(
         # Shear Design
         fyv_eff = min(fyv, 460.0)
         v = V_abs * 1000 / (b * d)
-        shear_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Shear Design</div><p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
+        shear_str = f"<h3 class='calc-section-title'>Shear Design</h3><p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
         
         v_max_calc = 0.8 * math.sqrt(fcu)
         v_max = min(v_max_calc, 5.0)
@@ -480,7 +480,7 @@ def design_section(
             
             sv = min(sv_req, sv_max)
             sv = math.floor(sv / 25.0) * 25.0
-            link_out = f"Provide 2-legs Y{int(link_dia)}mm bars @ {int(sv)}mm c/c"
+            link_out = f"<div class='final-answer-box'>Provide 2-legs Y{int(link_dia)}mm bars @ {int(sv)}mm c/c</div>"
             
         html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
 
@@ -554,7 +554,7 @@ def shear_and_drawing_section(
     # Shear Design
     fyv_eff = min(fyv, 460.0)
     v = V_abs * 1000 / (b * d)
-    shear_str = f"<div style='font-weight: bold; text-decoration: underline; margin-bottom: 8px; font-size: 0.95em; color: #374151;'>Shear Design</div><p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
+    shear_str = f"<h3 class='calc-section-title'>Shear Design</h3><p>\\( v = \\frac{{V \\times 1000}}{{b d}} = \\frac{{{money(V_abs)} \\times 1000}}{{{fmt(b)} \\times {fmt(d)}}} = {money(v)} \\text{{ N/mm}}^2 \\)</p>"
     
     v_max_calc = 0.8 * math.sqrt(fcu)
     v_max = min(v_max_calc, 5.0)
@@ -634,7 +634,7 @@ def shear_and_drawing_section(
         
         sv = min(sv_req, sv_max)
         sv = math.floor(sv / 25.0) * 25.0
-        link_out = f"Provide 2-legs Y{int(link_dia)}mm bars @ {int(sv)}mm c/c"
+        link_out = f"<div class='final-answer-box'>Provide 2-legs Y{int(link_dia)}mm bars @ {int(sv)}mm c/c</div>"
         
     html_lines.append(row(bs8110.REF_SHEAR_LINKS, link_str, link_out))
 
