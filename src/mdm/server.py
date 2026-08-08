@@ -129,8 +129,8 @@ def calculate_from_payload(payload: Dict[str, object]) -> Dict[str, object]:
 
     fixed_supports = {supports[0], supports[-1]} if bool(payload.get("exterior_fixed", True)) else set()
     
-    beam_type = payload.get("beam_type", "continuous").lower()
-    overhang_type = payload.get("overhang_type", "left").lower()
+    beam_type = str(payload.get("beam_type", "continuous")).lower()
+    overhang_type = str(payload.get("overhang_type", "left")).lower()
     
     from .analyzers.overhanging import OverhangingAnalyzer
     from .analyzers.simply_supported import SimplySupportedAnalyzer
@@ -337,7 +337,6 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                     # Assign green bg to the overall max, amber to the other
                     if task_pos and task_neg:
                         if abs(task_pos["M"]) >= abs(task_neg["M"]):
-                            task_pos["name"] += " [OVERALL MAX]"
                             task_pos["highlight_title"] = "OVERALL MAX"
                             task_pos["notes"] = combined_notes
                             task_pos["bg_color"] = "#f0fdf4"
@@ -348,7 +347,6 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                             task_neg["is_overall_max"] = False
                             envelope_tasks = [task_pos, task_neg]
                         else:
-                            task_neg["name"] += " [OVERALL MAX]"
                             task_neg["highlight_title"] = "OVERALL MAX"
                             task_neg["notes"] = combined_notes
                             task_neg["bg_color"] = "#f0fdf4"
@@ -359,14 +357,12 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                             task_pos["is_overall_max"] = False
                             envelope_tasks = [task_neg, task_pos]
                     elif task_pos:
-                        task_pos["name"] += " [OVERALL MAX]"
                         task_pos["highlight_title"] = "OVERALL MAX"
                         task_pos["notes"] = combined_notes
                         task_pos["bg_color"] = "#f0fdf4"
                         task_pos["is_overall_max"] = True
                         envelope_tasks = [task_pos]
                     elif task_neg:
-                        task_neg["name"] += " [OVERALL MAX]"
                         task_neg["highlight_title"] = "OVERALL MAX"
                         task_neg["notes"] = combined_notes
                         task_neg["bg_color"] = "#f0fdf4"
@@ -458,10 +454,13 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 # 0. Global Envelope Banner
                 if overall_max_reports or other_envelope_reports or shear_detailing_html:
                     global_banner = """
-                    <div style='margin: 0 0 24px; padding: 20px; background: #0f172a; color: #fff; border-radius: 8px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border-top: 4px solid #3b82f6;'>
-                        <h2 style='margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 1px; color: #f8fafc;'>GLOBAL ENVELOPE DESIGN</h2>
-                        <p style='margin: 8px 0 0; font-size: 0.95rem; color: #cbd5e1;'>Uniform, worst-case reinforcement layout safe for all possible load combinations.</p>
-                    </div>
+                    <details open style="margin-bottom: 24px;">
+                    <summary class="custom-banner-summary">
+                        <div class="banner-text-content">
+                            <h2 style='margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 1px; color: #f8fafc;'>GLOBAL ENVELOPE DESIGN</h2>
+                            <p style='margin: 8px 0 0; font-size: 0.95rem; color: #cbd5e1;'>Uniform, worst-case reinforcement layout safe for all possible load combinations. (Click to collapse)</p>
+                        </div>
+                    </summary>
                     """
                     reports.append(global_banner)
 
@@ -482,21 +481,27 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 # 3. Global shear & detailing (shown open)
                 if shear_detailing_html:
                     reports.append(shear_detailing_html)
+                    
+                # Close the Global Envelope <details>
+                if overall_max_reports or other_envelope_reports or shear_detailing_html:
+                    reports.append("</details>")
                 
                 # 4. Individual span & support designs (un-collapsed)
                 if individual_reports:
                     demarcation_html = """
-                    <div style='margin: 48px 0 24px; position: relative; text-align: center;'>
-                        <div style='position: absolute; top: 50%; left: 0; right: 0; border-top: 2px dashed #cbd5e1; z-index: 1;'></div>
-                        <div style='position: relative; z-index: 2; display: inline-block; background: #fff; padding: 0 24px; border-radius: 99px;'>
-                            <h3 style='margin: 0; color: #0f172a; font-size: 1.1rem; font-weight: 700; letter-spacing: 1px;'>INDIVIDUAL SPAN & SUPPORT DESIGNS</h3>
-                            <p style='margin: 4px 0 0; color: #64748b; font-size: 0.9rem; font-style: italic;'>Calculated using their original, individual shear forces</p>
+                    <details open style="margin-bottom: 24px;">
+                    <summary class="custom-banner-summary">
+                        <div class="banner-text-content">
+                            <h2 style='margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: 1px; color: #f8fafc;'>INDIVIDUAL SPAN & SUPPORT DESIGNS</h2>
+                            <p style='margin: 8px 0 0; font-size: 0.95rem; color: #cbd5e1;'>Calculated using their original, individual shear forces. (Click to collapse)</p>
                         </div>
-                    </div>
+                    </summary>
+                    <div style='margin-top: 24px;'>
                     """
                     reports.append(demarcation_html)
                     for r in individual_reports:
                         reports.append(r)
+                    reports.append("</div></details>")
                             
                 self.send_json(200, {"reports": reports})
             except Exception as error:

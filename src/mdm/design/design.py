@@ -156,11 +156,18 @@ def design_section(
     M_abs = abs(M)
     V_abs = abs(V)
     
-    html_lines.append(row(
-        "Design Forces",
-        f"<p>Design Moment \\( M = {money(M_abs)} \\text{{ kNm}} \\)<br/>Design Shear \\( V = {money(V_abs)} \\text{{ kN}} \\)</p>",
-        f"\\( M = {money(M_abs)} \\text{{ kNm}} \\)<br/>\\( V = {money(V_abs)} \\text{{ kN}} \\)"
-    ))
+    if skip_shear:
+        html_lines.append(row(
+            "Design Forces",
+            f"<p>Design Moment \\( M = {money(M_abs)} \\text{{ kNm}} \\)</p>",
+            f"\\( M = {money(M_abs)} \\text{{ kNm}} \\)"
+        ))
+    else:
+        html_lines.append(row(
+            "Design Forces",
+            f"<p>Design Moment \\( M = {money(M_abs)} \\text{{ kNm}} \\)<br/>Design Shear \\( V = {money(V_abs)} \\text{{ kN}} \\)</p>",
+            f"\\( M = {money(M_abs)} \\text{{ kNm}} \\)<br/>\\( V = {money(V_abs)} \\text{{ kN}} \\)"
+        ))
     
     # 1. Geometry and effective depth
     d = h - cover - link_dia - (main_bar_dia / 2.0)

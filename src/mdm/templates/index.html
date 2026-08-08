@@ -271,11 +271,45 @@
     tr.check-pass td {
       background: #f0fdf4;
     }
+    
+    .custom-banner-summary {
+      display: flex;
+      align-items: center;
+      margin: 0 0 24px;
+      padding: 20px;
+      background: #0f172a;
+      color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      border-top: 4px solid #3b82f6;
+      cursor: pointer;
+      list-style: none; /* Hide default marker */
+      position: relative;
+    }
+    .custom-banner-summary::-webkit-details-marker {
+      display: none; /* Hide for Safari */
+    }
+    .custom-banner-summary::before {
+      content: "▶";
+      font-size: 1.5rem;
+      color: #60a5fa;
+      position: absolute;
+      left: 20px;
+      transition: transform 0.2s;
+    }
+    details[open] > .custom-banner-summary::before {
+      transform: rotate(90deg);
+    }
+    .banner-text-content {
+      flex-grow: 1;
+      text-align: center;
+    }
+
     .calc-sheet {
       display: flex;
       flex-direction: column;
       gap: 0;
-      padding: 0;
+      padding: 15px 20px;
       background-color: #fafaf9; /* subtle off-white for paper */
       background-image: linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
       background-size: 20px 20px; /* grid pattern */
