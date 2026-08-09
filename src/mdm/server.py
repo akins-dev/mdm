@@ -287,6 +287,7 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 
                 all_tasks = span_tasks + support_tasks
                 
+                global_V = 0.0
                 if all_tasks:
                     global_V = max(t["V"] for t in all_tasks)
                     

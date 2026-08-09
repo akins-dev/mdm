@@ -183,9 +183,22 @@ def design_section(
     Mu = bs8110.K_PRIME * fcu * b * (d ** 2) / 1e6
     comp_msg = "<b>Compression reinforcement<br/>not required</b>" if M_abs <= Mu else "<b>Compression reinforcement<br/>required</b>"
     reinforcement_type_str = "<b>Singly Reinforced</b> \\( (M \\le M_u) \\)" if M_abs <= Mu else "<b>Doubly Reinforced</b> \\( (M > M_u) \\)"
+    
+    K_val = M_abs * 1e6 / (fcu * b * (d ** 2))
+    alt_check = f"""
+    <details style='margin-top: 10px; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;'>
+        <summary style='cursor: pointer; font-size: 0.9rem; color: #3b82f6; font-weight: 600;'>Alternative check using \\( K \\) and \\( K' \\)</summary>
+        <div style='margin-top: 10px; font-size: 0.95rem; color: #475569;'>
+            <p>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K_val)} \\)</p>
+            <p>\\( K' = {bs8110.K_PRIME} \\)</p>
+            <p>Since \\( K { '\\le' if K_val <= bs8110.K_PRIME else '>' } K' \\), the section is { 'singly' if K_val <= bs8110.K_PRIME else 'doubly' } reinforced.</p>
+        </div>
+    </details>
+    """
+    
     html_lines.append(row(
         bs8110.REF_ULTIMATE_MOMENT,
-        f"<h3 class='calc-section-title'>Flexural Design</h3><p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p><p>{reinforcement_type_str}</p>",
+        f"<h3 class='calc-section-title'>Flexural Design</h3><p>\\( M_u = \\frac{{{bs8110.K_PRIME} f_{{cu}} b d^2}}{{10^6}} = \\frac{{{bs8110.K_PRIME} \\times {fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}}{{10^6}} = {money(Mu)} \\text{{ kNm}} \\)</p><p>{reinforcement_type_str}</p>{alt_check}",
         f"\\( M_u = {money(Mu)} \\text{{ kNm}} \\)<br/><br/>{comp_msg}"
     ))
     
@@ -207,7 +220,7 @@ def design_section(
         z_val = d * (0.5 + math.sqrt(abs(0.25 - K / 0.9)))
         z = min(z_val, 0.95 * d)
         
-        calc_str = f"<h3 class='calc-section-title'>Neutral Axis check</h3><p>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>"
+        calc_str = f"<h3 class='calc-section-title'>Calculation for tension/compression steel</h3><p>\\( K = \\frac{{M}}{{f_{{cu}} b d^2}} = \\frac{{{money(M_abs)} \\times 10^6}}{{{fmt(fcu)} \\times {fmt(b)} \\times {fmt(d)}^2}} = {money(K)} \\)<br/>"
         calc_str += f"\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K}}{{0.9}}}} \\right] = {money(z_val)} \\text{{ mm}} \\)<br/>"
         calc_str += f"\\( z \\le 0.95d \\Rightarrow z \\le {money(0.95 * d)} \\text{{ mm}} \\)<br/>"
         
@@ -230,7 +243,7 @@ def design_section(
         x = (d - z) / 0.45
         d_prime_over_x = d_prime / x
         
-        calc_str = f"<h3 class='calc-section-title'>Neutral Axis check</h3><p>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K'}}{{0.9}}}} \\right] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
+        calc_str = f"<h3 class='calc-section-title'>Calculation for tension/compression steel</h3><p>\\( K' = {bs8110.K_PRIME} \\)<br/>\\( z = d \\left[ 0.5 + \\sqrt{{0.25 - \\frac{{K'}}{{0.9}}}} \\right] = {money(z)} \\text{{ mm}} \\)<br/>\\( x = \\frac{{d - z}}{{0.45}} = {money(x)} \\text{{ mm}} \\)</p>"
         
         calc_str += f"<p>\\( d'/x = {money(d_prime_over_x)} \\). "
         if d_prime_over_x <= bs8110.LIMIT_D_PRIME_X:
@@ -254,13 +267,21 @@ def design_section(
     As_req_flexure = As_req
     As_min_pct = 0.24 if fy_eff <= 250 else 0.13
     As_min = (As_min_pct / 100.0) * b * h
+    
+    as_min_str = f"<h3 class='calc-section-title'>Minimum Reinforcement</h3><p>\\( A_{{s,min}} = {As_min_pct}\\% b h = \\frac{{{As_min_pct}}}{{100}} \\times {fmt(b)} \\times {fmt(h)} = {money(As_min)} \\text{{ mm}}^2 \\)</p>"
     if As_req < As_min:
-        html_lines.append(row(
-            bs8110.REF_MIN_STEEL,
-            f"<p>\\( A_{{s,min}} = {As_min_pct}\\% b h = {money(As_min)} \\text{{ mm}}^2 \\)</p>",
-            f"Use \\( A_s = {money(As_min)} \\text{{ mm}}^2 \\)"
-        ))
+        as_min_str += f"<p>Since \\( A_s = {money(As_req)} < A_{{s,min}} \\), adopt \\( A_s = {money(As_min)} \\text{{ mm}}^2 \\)</p>"
         As_req = As_min
+        as_min_summary = f"Use \\( A_s = {money(As_min)} \\text{{ mm}}^2 \\)"
+    else:
+        as_min_str += f"<p>Since \\( A_s = {money(As_req)} \\ge A_{{s,min}} \\), \\( A_s \\) is adequate.</p>"
+        as_min_summary = f"\\( A_s > A_{{s,min}} \\)"
+        
+    html_lines.append(row(
+        bs8110.REF_MIN_STEEL,
+        as_min_str,
+        as_min_summary
+    ))
         
     Asc_min = 0.002 * b * h
     if Asc_req > 0 and Asc_req < Asc_min:
@@ -557,6 +578,12 @@ def shear_and_drawing_section(
     html_lines.append(f"<h4>{header_text}</h4>")
     
     V_abs = abs(V)
+    
+    html_lines.append(row(
+        "Design Forces",
+        f"<p>Design Shear \\( V = {money(V_abs)} \\text{{ kN}} \\)</p>",
+        f"\\( V = {money(V_abs)} \\text{{ kN}} \\)"
+    ))
     
     # Shear Design
     fyv_eff = min(fyv, 460.0)
