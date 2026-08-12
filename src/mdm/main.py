@@ -1,5 +1,11 @@
 import argparse
-from .server import create_server
+import sys
+from pathlib import Path
+
+# Add the 'src' directory to the Python path so this can be run directly
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from mdm.server import create_server
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Hardy Cross moment distribution browser GUI.")

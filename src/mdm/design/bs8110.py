@@ -23,6 +23,60 @@ PARTIAL_SAFETY_STEEL = 0.95  # 1/1.05 after Amendment 3 (previously 0.87)
 LIMIT_D_PRIME_X = 0.37       # For fy = 460
 K_PRIME = 0.156
 
+# ---------------------------------------------------------------------------
+# Column effective-length factor beta  (BS 8110-1:1997 Tables 3.19 & 3.20)
+# Keyed [cond_top][cond_bot]; symmetric, so (i,j) == (j,i). None = not permitted
+# (condition 4 pairs only with condition 1). le = beta * l0, l0 = clear height.
+# ---------------------------------------------------------------------------
+BETA_BRACED = {
+    1: {1: 0.75, 2: 0.80, 3: 0.90},
+    2: {1: 0.80, 2: 0.85, 3: 0.95},
+    3: {1: 0.90, 2: 0.95, 3: 1.00},
+}
+BETA_UNBRACED = {
+    1: {1: 1.2, 2: 1.3, 3: 1.6, 4: 2.2},
+    2: {1: 1.3, 2: 1.5, 3: 1.8},
+    3: {1: 1.6, 2: 1.8},
+    4: {1: 2.2},
+}
+
+def beta_effective_length(braced: bool, cond_top: int, cond_bot: int) -> float:
+    """Return beta from Table 3.19 (braced) or 3.20 (unbraced).
+
+    The tables are symmetric in top/bottom. Condition 4 (unrestrained) is only
+    tabulated against condition 1; any other pairing with 4 is not permitted and
+    conservatively falls back to the largest tabulated value.
+    """
+    table = BETA_BRACED if braced else BETA_UNBRACED
+    ct, cb = int(cond_top), int(cond_bot)
+    val = table.get(ct, {}).get(cb)
+    if val is None:
+        val = table.get(cb, {}).get(ct)  # symmetry
+    if val is None:
+        # Not permitted combination (e.g. cond 4 against 2/3): use worst tabulated.
+        val = 1.0 if braced else 2.2
+    return val
+
+# Biaxial bending coefficient beta (BS 8110-1:1997 Table 3.22), as a function of
+# N/(b h fcu). Linear interpolation between the tabulated break-points.
+_BIAXIAL_BETA_TABLE = [
+    (0.000, 1.00), (0.100, 0.88), (0.200, 0.77), (0.300, 0.65),
+    (0.400, 0.53), (0.500, 0.42), (0.600, 0.30),
+]
+
+def biaxial_beta(n_ratio: float) -> float:
+    """Interpolate beta for biaxial bending from Table 3.22 given N/(b*h*fcu)."""
+    pts = _BIAXIAL_BETA_TABLE
+    if n_ratio <= pts[0][0]:
+        return pts[0][1]
+    if n_ratio >= pts[-1][0]:
+        return pts[-1][1]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if x0 <= n_ratio <= x1:
+            t = (n_ratio - x0) / (x1 - x0)
+            return y0 + t * (y1 - y0)
+    return pts[-1][1]
+
 STANDARD_BAR_AREAS = {
     6: [28.3, 56.6, 84.9, 113, 142, 170, 198, 226, 255, 283],
     8: [50.3, 101, 151, 201, 252, 302, 352, 402, 453, 503],

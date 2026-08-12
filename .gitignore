@@ -34,6 +34,7 @@ Thumbs.db
 
 .codex
 .agents
+.claude/
 
 # Large files
 *.pdf

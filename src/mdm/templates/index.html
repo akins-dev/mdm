@@ -11,6 +11,8 @@
     };
   </script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -44,8 +46,8 @@
     }
     main {
       display: grid;
-      grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
-      gap: 14px;
+      grid-template-columns: var(--sidebar-width, 430px) 14px minmax(0, 1fr);
+      gap: 0;
       padding: 14px;
       height: calc(100vh - 56px);
     }
@@ -393,92 +395,242 @@
 </head>
 <body>
   <header><h1>Hardy Cross Moment Distribution</h1></header>
-  <main>
+  <main id="main-container">
     <section class="panel inputs">
-      <div class="section">
-        <h2>Beam Input</h2>
-        <div class="grid" style="margin-bottom: 10px;">
-          <div style="grid-column: 1 / 3;">
-            <label for="beamType">Beam Type</label>
-            <select id="beamType" style="width: 100%; border: 1px solid #cfd7df; border-radius: 6px; padding: 8px; font: inherit; background: #fff;">
-              <option value="continuous">Continuous Beam</option>
-              <option value="overhanging">Overhanging Beam</option>
-            </select>
-          </div>
-          <div style="grid-column: 1 / 3; display: none;" id="overhangOptions">
-            <label for="overhangType">Overhang Position</label>
-            <select id="overhangType" style="width: 100%; border: 1px solid #cfd7df; border-radius: 6px; padding: 8px; font: inherit; background: #fff;">
-              <option value="left">Left Side</option>
-              <option value="right" selected>Right Side</option>
-              <option value="both">Both Sides</option>
-            </select>
-          </div>
-        </div>
-        <div class="grid">
-          <div>
-            <label for="supportCount">Number of supports</label>
-            <input id="supportCount" type="number" min="2" max="30" value="3">
-          </div>
-          <div>
-            <label for="maxCycles">Maximum cycles</label>
-            <input id="maxCycles" type="number" min="1" value="50">
-          </div>
-          <div>
-            <label for="tolerance">Tolerance</label>
-            <input id="tolerance" type="text" value="0.0001">
-          </div>
-          <div>
-            <label>&nbsp;</label>
-            <label><input id="exteriorFixed" type="checkbox"> Exterior supports fixed</label>
-            <div style="font-size: 11px; color: #cf1322; font-weight: 600; margin-top: 4px;">Leave unchecked if exterior supports are pins/rollers (not strictly fixed).</div>
-            <details style="font-size: 11px; color: var(--text); margin-top: 4px; line-height: 1.5;">
-              <summary style="cursor: pointer; color: #0050b3; font-weight: 600;">Why? (click to expand)</summary>
-              <div style="margin-top: 4px; padding: 6px 8px; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 4px; color: #434343;">
-                In practice, the ends of continuous beams typically rest on columns or walls that allow rotation — these are modelled as <strong>pins or rollers</strong>, not fixed supports. Only check this box if the beam ends are specifically designed as fully rigid connections (e.g. monolithic connections into shear walls or deep foundations) where rotation is physically restrained.
-              </div>
-            </details>
-          </div>
-        </div>
+      <div style="display: flex; background: #e8edf2; border-bottom: 1px solid var(--line);">
+        <button id="modeBeam" class="mode-btn" style="flex: 1; border-radius: 0; background: #fff; border-bottom: 2px solid var(--accent); color: var(--accent); padding: 12px;">Continuous Beam</button>
+        <button id="modeColumn" class="mode-btn" style="flex: 1; border-radius: 0; background: transparent; color: var(--muted); border-bottom: 2px solid transparent; padding: 12px;">Column Design</button>
       </div>
-      <div class="span-list">
-        <h2>Spans</h2>
-        <p class="formula">UDLs use <strong>w@start-end</strong>, where <strong>start</strong> and <strong>end</strong> are distances from the left support. For a full-span UDL, simply enter the value (e.g. <strong>15</strong>). Separate multiple UDLs with semicolons.</p>
-        <p class="formula">Point loads use <strong>P@a</strong>, where <strong>a</strong> is the distance from the left support. Separate multiple point loads with semicolons.</p>
-        <div id="spans"></div>
-      </div>
-      <div class="section">
-        <details>
-            <summary style="font-weight: 700; cursor: pointer; margin-bottom: 10px;">RC Design Parameters</summary>
-            <div class="grid" style="margin-top: 10px;">
-              <div><label>fcu (N/mm²)</label><input id="paramFcu" type="number" value="30"></div>
-              <div><label>fy (N/mm²)</label><input id="paramFy" type="number" value="460"></div>
-              <div><label>fyv (N/mm²)</label><input id="paramFyv" type="number" value="250"></div>
-              <div><label>b (mm)</label><input id="paramB" type="number" value="230"></div>
-              <div><label>h (mm)</label><input id="paramH" type="number" value="450"></div>
-              <div><label>Cover (mm)</label><input id="paramCover" type="number" value="30"></div>
-              <div><label>Main Bar Ø (mm)</label><input id="paramMainBarDia" type="number" value="20"></div>
-              <div><label>Link Ø (mm)</label><input id="paramLinkDia" type="number" value="10"></div>
 
+      <div id="beamInputSection" style="display: flex; flex-direction: column; flex: 1; min-height: 0;">
+        <div class="section">
+          <h2>Beam Input</h2>
+          <div class="grid" style="margin-bottom: 10px;">
+            <div style="grid-column: 1 / 3;">
+              <label for="beamType">Beam Type</label>
+              <select id="beamType" style="width: 100%; border: 1px solid #cfd7df; border-radius: 6px; padding: 8px; font: inherit; background: #fff;">
+                <option value="continuous">Continuous Beam</option>
+                <option value="overhanging">Overhanging Beam</option>
+              </select>
             </div>
-            <div style="margin-top: 10px;">
-                <button class="primary" id="runDesign" style="width: 100%">Run RC Design</button>
+            <div style="grid-column: 1 / 3; display: none;" id="overhangOptions">
+              <label for="overhangType">Overhang Position</label>
+              <select id="overhangType" style="width: 100%; border: 1px solid #cfd7df; border-radius: 6px; padding: 8px; font: inherit; background: #fff;">
+                <option value="left">Left Side</option>
+                <option value="right" selected>Right Side</option>
+                <option value="both">Both Sides</option>
+              </select>
             </div>
-        </details>
+          </div>
+          <div class="grid">
+            <div>
+              <label for="supportCount">Number of supports</label>
+              <input id="supportCount" type="number" min="2" max="30" value="3">
+            </div>
+            <div>
+              <label for="maxCycles">Maximum cycles</label>
+              <input id="maxCycles" type="number" min="1" value="50">
+            </div>
+            <div>
+              <label for="tolerance">Tolerance</label>
+              <input id="tolerance" type="text" value="0.0001">
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <label><input id="exteriorFixed" type="checkbox"> Exterior supports fixed</label>
+              <div style="font-size: 11px; color: #cf1322; font-weight: 600; margin-top: 4px;">Leave unchecked if exterior supports are pins/rollers (not strictly fixed).</div>
+              <details style="font-size: 11px; color: var(--text); margin-top: 4px; line-height: 1.5;">
+                <summary style="cursor: pointer; color: #0050b3; font-weight: 600;">Why? (click to expand)</summary>
+                <div style="margin-top: 4px; padding: 6px 8px; background: #fff1f0; border: 1px solid #ffa39e; border-radius: 4px; color: #434343;">
+                  In practice, the ends of continuous beams typically rest on columns or walls that allow rotation — these are modelled as <strong>pins or rollers</strong>, not fixed supports. Only check this box if the beam ends are specifically designed as fully rigid connections (e.g. monolithic connections into shear walls or deep foundations) where rotation is physically restrained.
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+        <div class="span-list">
+          <h2>Spans</h2>
+          <p class="formula">UDLs use <strong>w@start-end</strong>, where <strong>start</strong> and <strong>end</strong> are distances from the left support. For a full-span UDL, simply enter the value (e.g. <strong>15</strong>). Separate multiple UDLs with semicolons.</p>
+          <p class="formula">Point loads use <strong>P@a</strong>, where <strong>a</strong> is the distance from the left support. Separate multiple point loads with semicolons.</p>
+          <div id="spans"></div>
+        </div>
+        <div class="section">
+          <details>
+              <summary style="font-weight: 700; cursor: pointer; margin-bottom: 10px;">RC Design Parameters</summary>
+              <div class="grid" style="margin-top: 10px;">
+                <div><label>fcu (N/mm²)</label><input id="paramFcu" type="number" value="30"></div>
+                <div><label>fy (N/mm²)</label><input id="paramFy" type="number" value="460"></div>
+                <div><label>fyv (N/mm²)</label><input id="paramFyv" type="number" value="250"></div>
+                <div><label>b (mm)</label><input id="paramB" type="number" value="230"></div>
+                <div><label>h (mm)</label><input id="paramH" type="number" value="450"></div>
+                <div><label>Cover (mm)</label><input id="paramCover" type="number" value="30"></div>
+                <div><label>Main Bar Ø (mm)</label><input id="paramMainBarDia" type="number" value="20"></div>
+                <div><label>Link Ø (mm)</label><input id="paramLinkDia" type="number" value="10"></div>
+              </div>
+              <div style="margin-top: 10px;">
+                  <button class="primary" id="runDesign" style="width: 100%">Run RC Design</button>
+              </div>
+          </details>
+        </div>
+        <div class="actions">
+          <button class="primary" id="calculate">Calculate Analysis</button>
+          <button class="secondary" id="clear">Clear Outputs</button>
+          <button class="secondary" id="printReport">Print / PDF</button>
+          <div id="status" class="status">Enter span data, then calculate.</div>
+        </div>
       </div>
-      <div class="actions">
-        <button class="primary" id="calculate">Calculate Analysis</button>
-        <button class="secondary" id="clear">Clear Outputs</button>
-        <button class="secondary" id="printReport">Print / PDF</button>
-        <div id="status" class="status">Enter span data, then calculate.</div>
+
+      <div id="columnInputSection" style="display: none; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
+        <div class="section">
+          <h2>Global Column Properties</h2>
+          <div class="grid">
+            <div><label>fcu (N/mm²)</label><input id="colFcu" type="number" value="30"></div>
+            <div><label>fy (N/mm²)</label><input id="colFy" type="number" value="460"></div>
+            <div><label>Cover (mm)</label><input id="colCover" type="number" value="35"></div>
+            <div><label>Target Bar Ø (mm)</label><input id="colTargetDia" type="number" value="20"></div>
+            <div><label>Braced Status</label>
+              <select id="colBraced" style="width: 100%; border: 1px solid #cfd7df; border-radius: 6px; padding: 8px; font: inherit; background: #fff;">
+                <option value="braced">Braced</option>
+                <option value="unbraced">Unbraced</option>
+              </select>
+            </div>
+            <div><label>Base Fixity (foundation)</label>
+              <select id="colBaseFixity" style="width: 100%; border: 1px solid #cfd7df; border-radius: 6px; padding: 8px; font: inherit; background: #fff;">
+                <option value="1">Fixed base (moment-resisting foundation)</option>
+                <option value="2">Partially fixed base</option>
+                <option value="3">Pinned / nominal base</option>
+              </select>
+            </div>
+          </div>
+          <p style="font-size:11px; color:var(--muted); margin:8px 0 0;">
+            End conditions at every beam-column joint (Table 3.19/3.20) are now
+            <b>derived automatically</b> from the beam depths vs the column size — you only
+            set how the column meets the foundation.
+          </p>
+        </div>
+        
+        <div class="section" style="flex: 1; display: flex; flex-direction: column; min-height: 400px; padding: 14px;">
+          <!-- Storey Table -->
+          <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <h2>Storey Data (Bottom to Top)</h2>
+              <button class="secondary" id="addStoreyBtn" style="padding: 4px 8px; font-size: 12px;">+ Add Storey</button>
+            </div>
+            <div style="overflow-x: auto; overflow-y: auto; flex: 1;">
+              <table id="storeyTable" style="min-width: 600px; font-size: 12px; margin-bottom: 10px;">
+                <thead>
+                  <tr>
+                    <th>Storey Name</th>
+                    <th style="width: 70px;">Height (m)</th>
+                    <th style="width: 70px;">b (mm)</th>
+                    <th style="width: 70px;">h (mm)</th>
+                    <th style="width: 80px;">Slab Load (kN/m²)</th>
+                    <th style="width: 80px;">Line Load (kN/m)</th>
+                    <th style="width: 40px;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="storeyTbody">
+                  <!-- Dynamic Rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Frame & Loads: beam editor for the selected storey -->
+        <div class="section" style="padding: 14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h2 style="margin:0;">Beams framing into <span id="beamEditorStorey" style="color:var(--accent);">—</span></h2>
+            <button class="secondary" id="addBeamBtn" style="padding:4px 8px; font-size:12px;">+ Add Beam</button>
+          </div>
+          <p style="font-size:11px; color:var(--muted); margin:0 0 8px;">
+            Beams at the joint on <b>top</b> of this storey. Opposite sides (+/−) cancel automatically →
+            corner/edge/internal falls out. The FEM load is <b>derived</b> (slab share from the storey's
+            Slab Load + beam self-weight + wall); the top storey is treated as the <b>roof</b> (no wall).
+            Set <b>UDL w</b> only to override the derived load. Leave empty for a pure axial column.
+          </p>
+          <div style="overflow-x:auto;">
+            <table id="beamTable" style="min-width:640px; font-size:12px;">
+              <thead><tr>
+                <th style="width:56px;">Axis</th><th style="width:52px;">Side</th>
+                <th style="width:64px;">Span (m)</th>
+                <th style="width:64px;">b (mm)</th><th style="width:64px;">h (mm)</th>
+                <th style="width:76px;">Wall (kN/m)</th>
+                <th style="width:88px;">UDL w override</th>
+                <th style="width:36px;"></th>
+              </tr></thead>
+              <tbody id="beamTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="actions">
+          <label style="font-size:12px; display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+            <input type="checkbox" id="colHalveStiffness" checked>
+            Halve beam stiffness (BS 8110 cl 3.2.1.2.5) — uncheck for Oyenuga textbook
+          </label>
+          <button class="primary" id="analyzeColumn">Analyze Frame → Design All</button>
+          <button class="secondary" id="runColumnDesign">Design Bottom (Direct Moments)</button>
+          <div id="colStatus" class="status">Enter column data, then design.</div>
+        </div>
       </div>
     </section>
-    <section class="panel">
+    
+    <div id="resizer" style="cursor: col-resize; display: flex; align-items: center; justify-content: center; z-index: 10;">
+       <div style="width: 4px; height: 30px; border-radius: 2px; background: #cbd5e1;"></div>
+    </div>
+
+    <section class="panel" style="position: relative; display: flex; flex-direction: column;">
       <nav class="tabs" id="tabs"></nav>
-      <div class="table-wrap" id="output"></div>
+      <div class="table-wrap" id="output" style="flex: 1; display: block;"></div>
+      <div id="column3DWrapper" style="display: none; flex: 1; flex-direction: column; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h2 style="margin:0;">3D Column View</h2>
+            <span style="font-size: 11px; color: var(--muted);">Drag to rotate, scroll to zoom. Click a lift to select.</span>
+        </div>
+        <div id="column3DContainer" style="flex: 1; background: #e8edf2; border: 1px solid var(--line); border-radius: 6px; position: relative; overflow: hidden; min-height: 350px;">
+        </div>
+      </div>
     </section>
     <div id="print-area"></div>
   </main>
   <script>
+    document.getElementById('modeBeam').addEventListener('click', () => {
+      document.getElementById('modeBeam').style.background = '#fff';
+      document.getElementById('modeBeam').style.color = 'var(--accent)';
+      document.getElementById('modeBeam').style.borderBottomColor = 'var(--accent)';
+      
+      document.getElementById('modeColumn').style.background = 'transparent';
+      document.getElementById('modeColumn').style.color = 'var(--muted)';
+      document.getElementById('modeColumn').style.borderBottomColor = 'transparent';
+      
+      document.getElementById('beamInputSection').style.display = 'flex';
+      document.getElementById('columnInputSection').style.display = 'none';
+      
+      document.getElementById('tabs').innerHTML = '';
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('output').style.display = 'block';
+      if(document.getElementById('column3DWrapper')) document.getElementById('column3DWrapper').style.display = 'none';
+    });
+
+    document.getElementById('modeColumn').addEventListener('click', () => {
+      document.getElementById('modeColumn').style.background = '#fff';
+      document.getElementById('modeColumn').style.color = 'var(--accent)';
+      document.getElementById('modeColumn').style.borderBottomColor = 'var(--accent)';
+      
+      document.getElementById('modeBeam').style.background = 'transparent';
+      document.getElementById('modeBeam').style.color = 'var(--muted)';
+      document.getElementById('modeBeam').style.borderBottomColor = 'transparent';
+      
+      document.getElementById('beamInputSection').style.display = 'none';
+      document.getElementById('columnInputSection').style.display = 'flex';
+      
+      document.getElementById('tabs').innerHTML = '<a href="#" class="active tab3D-link" style="display: block;">3D Model</a>';
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('output').style.display = 'none';
+      if(document.getElementById('column3DWrapper')) document.getElementById('column3DWrapper').style.display = 'flex';
+    });
+
     document.getElementById('beamType').addEventListener('change', (e) => {
       document.getElementById('overhangOptions').style.display = e.target.value === 'overhanging' ? 'block' : 'none';
       if (e.target.value === 'simply_supported' || e.target.value === 'cantilever') {
@@ -2054,6 +2206,635 @@
             setStatus(error.message, true);
         }
     });
+
+    // STOREY & 3D VISUALIZATION LOGIC
+    let storeys = [
+        { id: 1, name: "Ground", h: 3.0, b: 300, h_dim: 400, area_load: 5.0, line_load: 8.0, beams: [] }
+    ];
+    let selectedStoreyId = 1;
+    let scene, camera, renderer, controls, raycaster, mouse;
+    let columnMeshes = [];
+    let threeInitialized = false;
+
+    function renderStoreyTable() {
+        const tbody = document.getElementById('storeyTbody');
+        tbody.innerHTML = '';
+        storeys.forEach((st) => {
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            if (st.id === selectedStoreyId) {
+                tr.style.background = '#e6f7ff';
+            }
+            
+            tr.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+                    selectedStoreyId = st.id;
+                    renderStoreyTable();
+                    update3DSelection();
+                }
+            });
+
+            tr.innerHTML = `
+                <td><input type="text" value="${st.name}" onchange="updateStorey(${st.id}, 'name', this.value)" style="width: 100%;"></td>
+                <td><input type="number" step="0.1" value="${st.h}" onchange="updateStorey(${st.id}, 'h', this.value)" style="width: 100%;"></td>
+                <td><input type="number" value="${st.b}" onchange="updateStorey(${st.id}, 'b', this.value)" style="width: 100%;"></td>
+                <td><input type="number" value="${st.h_dim}" onchange="updateStorey(${st.id}, 'h_dim', this.value)" style="width: 100%;"></td>
+                <td><input type="number" step="0.1" value="${st.area_load}" onchange="updateStorey(${st.id}, 'area_load', this.value)" style="width: 100%;"></td>
+                <td><input type="number" step="0.1" value="${st.line_load}" onchange="updateStorey(${st.id}, 'line_load', this.value)" style="width: 100%;"></td>
+                <td><button class="secondary" onclick="removeStorey(${st.id})" style="padding: 4px; font-size: 10px; color: var(--danger);">X</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        if (threeInitialized) build3DScene();
+        renderBeamEditor();
+    }
+
+    function selectedStorey() {
+        return storeys.find(x => x.id === selectedStoreyId) || storeys[0];
+    }
+
+    function renderBeamEditor() {
+        const tbody = document.getElementById('beamTbody');
+        if (!tbody) return;
+        const st = selectedStorey();
+        const label = document.getElementById('beamEditorStorey');
+        if (label) label.textContent = st ? st.name : '—';
+        tbody.innerHTML = '';
+        if (!st) return;
+        if (!st.beams) st.beams = [];
+        st.beams.forEach((bm, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><select onchange="updateBeam(${i},'axis',this.value)" style="width:100%;">
+                    <option value="x"${bm.axis==='x'?' selected':''}>x-x</option>
+                    <option value="y"${bm.axis==='y'?' selected':''}>y-y</option></select></td>
+                <td><select onchange="updateBeam(${i},'side',this.value)" style="width:100%;">
+                    <option value="1"${bm.side==1?' selected':''}>+</option>
+                    <option value="-1"${bm.side==-1?' selected':''}>−</option></select></td>
+                <td><input type="number" step="0.1" value="${bm.span}" onchange="updateBeam(${i},'span',this.value)" style="width:100%;"></td>
+                <td><input type="number" value="${bm.b}" onchange="updateBeam(${i},'b',this.value)" style="width:100%;"></td>
+                <td><input type="number" value="${bm.h}" onchange="updateBeam(${i},'h',this.value)" style="width:100%;"></td>
+                <td><input type="number" step="0.1" value="${bm.wall != null ? bm.wall : 0}" onchange="updateBeam(${i},'wall',this.value)" style="width:100%;"></td>
+                <td><input type="number" placeholder="auto" value="${bm.w != null && bm.w !== '' ? bm.w : ''}" onchange="updateBeam(${i},'w',this.value)" style="width:100%;"></td>
+                <td><button class="secondary" onclick="removeBeam(${i})" style="padding:4px; font-size:10px; color:var(--danger);">X</button></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.updateBeam = function(i, field, val) {
+        const st = selectedStorey();
+        if (!st || !st.beams[i]) return;
+        if (field === 'axis') {
+            st.beams[i][field] = val;
+        } else if (field === 'w') {
+            // UDL is an optional override — blank means "derive it".
+            st.beams[i][field] = (val === '' || val == null) ? '' : parseFloat(val);
+        } else {
+            st.beams[i][field] = parseFloat(val);
+        }
+        if (threeInitialized) build3DScene();
+    };
+    window.removeBeam = function(i) {
+        const st = selectedStorey();
+        if (!st) return;
+        st.beams.splice(i, 1);
+        renderBeamEditor();
+        if (threeInitialized) build3DScene();
+    };
+    window.updateStorey = function(id, field, val) {
+        const s = storeys.find(x => x.id === id);
+        if (s) {
+            s[field] = field === 'name' ? val : parseFloat(val);
+            if (threeInitialized) build3DScene();
+        }
+    };
+    
+    window.removeStorey = function(id) {
+        storeys = storeys.filter(x => x.id !== id);
+        if (selectedStoreyId === id && storeys.length > 0) {
+            selectedStoreyId = storeys[0].id;
+        }
+        renderStoreyTable();
+    };
+    
+    document.getElementById('addStoreyBtn').addEventListener('click', () => {
+        const newId = storeys.length > 0 ? Math.max(...storeys.map(s => s.id)) + 1 : 1;
+        const name = `Level ${newId}`;
+        storeys.push({ id: newId, name: name, h: 3.0, b: 300, h_dim: 400, area_load: 5.0, line_load: 8.0, beams: [] });
+        renderStoreyTable();
+    });
+
+    document.getElementById('addBeamBtn').addEventListener('click', () => {
+        const st = selectedStorey();
+        if (!st) return;
+        if (!st.beams) st.beams = [];
+        st.beams.push({ axis: 'x', side: 1, span: 6.0, b: 300, h: 600, wall: 0, w: '' });
+        renderBeamEditor();
+        if (threeInitialized) build3DScene();
+    });
+
+    function init3D() {
+        const container = document.getElementById('column3DContainer');
+        if (container.clientWidth === 0) return; // Wait until visible
+        
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe8edf2);
+        
+        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+        
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+        
+        raycaster = new THREE.Raycaster();
+        mouse = new THREE.Vector2();
+        
+        renderer.domElement.addEventListener('click', onMouseClick, false);
+        window.addEventListener('resize', onWindowResize, false);
+        
+        threeInitialized = true;
+        build3DScene();
+        animate();
+    }
+    
+    // ---- Phase 3: annotated 3D helpers ------------------------------------
+    const COL_GREY = 0x94a3b8;
+    let annObjects = [];   // beams / glyphs / labels, cleared on each rebuild
+
+    function utilColor(u, status) {
+        if (status === 'inadequate') return 0xef4444;
+        if (u == null) return COL_GREY;
+        if (u < 0.5) return 0x22c55e;
+        if (u < 0.8) return 0xf59e0b;
+        return 0xef4444;
+    }
+
+    function makeLabelSprite(text, bg) {
+        const font = 26, pad = 8;
+        const canvas = document.createElement('canvas');
+        let ctx = canvas.getContext('2d');
+        ctx.font = `bold ${font}px system-ui, sans-serif`;
+        const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
+        const h = font + pad * 2;
+        canvas.width = w; canvas.height = h;
+        ctx = canvas.getContext('2d');
+        ctx.font = `bold ${font}px system-ui, sans-serif`;
+        ctx.fillStyle = bg || 'rgba(15,23,42,0.85)';
+        const r = 7;
+        ctx.beginPath();
+        ctx.moveTo(r, 0); ctx.arcTo(w, 0, w, h, r); ctx.arcTo(w, h, 0, h, r);
+        ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, w, 0, r); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+        ctx.fillText(text, w / 2, h / 2);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+        const s = 0.0042;
+        sprite.scale.set(w * s, h * s, 1);
+        sprite.renderOrder = 999;
+        return sprite;
+    }
+
+    function makeMomentArc(axis, colorHex) {
+        // Partial torus (open ring) reads as a moment; normal along the world axis.
+        const R = 0.34, tube = 0.028, arc = Math.PI * 1.5;
+        const geo = new THREE.TorusGeometry(R, tube, 10, 36, arc);
+        const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+        const torus = new THREE.Mesh(geo, mat);
+        if (axis === 'x') torus.rotation.y = Math.PI / 2;   // local Z (normal) -> world X
+        // axis 'y': identity (local Z already = world Z)
+        // arrowhead at the open end, tangent to the arc
+        const head = new THREE.Mesh(new THREE.ConeGeometry(tube * 3, tube * 9, 10), mat);
+        const a = arc;
+        head.position.set(R * Math.cos(a), R * Math.sin(a), 0);
+        const tangent = new THREE.Vector3(-Math.sin(a), Math.cos(a), 0).normalize();
+        head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
+        torus.add(head);
+        return torus;
+    }
+
+    function clearAnnotations() {
+        annObjects.forEach(o => {
+            scene.remove(o);
+            o.traverse && o.traverse(c => {
+                if (c.geometry) c.geometry.dispose();
+                if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose && m.dispose());
+            });
+            if (o.material && o.material.map) o.material.map.dispose();
+        });
+        annObjects = [];
+    }
+
+    function cleanAxis(s) {
+        if (!s) return '';
+        if (s.indexOf('Biaxial') === 0) return 'Biaxial → uniaxial ' + (s.indexOf('X-X') >= 0 ? 'x-x' : 'y-y');
+        return s;
+    }
+
+    function ensureHud() {
+        const container = document.getElementById('column3DContainer');
+        if (!container) return null;
+        let hud = document.getElementById('col3DHud');
+        if (!hud) {
+            hud = document.createElement('div');
+            hud.id = 'col3DHud';
+            hud.style.cssText = 'position:absolute;top:10px;left:10px;max-width:240px;background:rgba(255,255,255,0.93);border:1px solid #cbd5e1;border-radius:8px;padding:10px 12px;font:12px/1.45 system-ui,sans-serif;color:#0f172a;box-shadow:0 2px 8px rgba(0,0,0,0.12);pointer-events:none;';
+            container.appendChild(hud);
+        }
+        let legend = document.getElementById('col3DLegend');
+        if (!legend) {
+            legend = document.createElement('div');
+            legend.id = 'col3DLegend';
+            legend.style.cssText = 'position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,0.93);border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font:11px/1.5 system-ui,sans-serif;color:#0f172a;pointer-events:none;';
+            legend.innerHTML = '<b>Utilisation</b> (A<sub>sc</sub> / 6% cap)<br>' +
+                '<span style="color:#22c55e">■</span> &lt;0.5&nbsp; <span style="color:#f59e0b">■</span> &lt;0.8&nbsp; <span style="color:#ef4444">■</span> ≥0.8<br>' +
+                '<span style="color:#b98a54">■</span> beam&nbsp; <span style="color:#0ea5e9">▼</span> N&nbsp; <span style="color:#ef4444">↻</span> Mx&nbsp; <span style="color:#8b5cf6">↻</span> My';
+            container.appendChild(legend);
+        }
+        return hud;
+    }
+
+    function updateHud() {
+        const hud = ensureHud();
+        if (!hud) return;
+        const viz = window._colViz;
+        if (!viz) {
+            hud.innerHTML = '<b>3D Column</b><br><span style="color:#64748b">Click “Analyze Frame → Design All” to annotate the model with moments &amp; design.</span>';
+            return;
+        }
+        const st = selectedStorey();
+        const i = storeys.findIndex(s => st && s.id === st.id);
+        const lv = viz.lifts[i] || viz.lifts[0];
+        if (!lv) { hud.innerHTML = ''; return; }
+        const u = lv.utilisation;
+        const c = lv.status === 'inadequate' ? '#ef4444' : (u < 0.5 ? '#16a34a' : (u < 0.8 ? '#d97706' : '#ef4444'));
+        hud.innerHTML =
+            `<div style="font-weight:700;margin-bottom:4px">Lift: ${lv.name}</div>` +
+            `<div>N = <b>${Math.round(lv.N)}</b> kN</div>` +
+            `<div>M<sub>x</sub> (top/bot): ${(+lv.Mx_top).toFixed(1)} / ${(+lv.Mx_bot).toFixed(1)} kNm</div>` +
+            `<div>M<sub>y</sub> (top/bot): ${(+lv.My_top).toFixed(1)} / ${(+lv.My_bot).toFixed(1)} kNm</div>` +
+            `<div>M<sub>des</sub> = <b>${lv.M_des}</b> kNm &nbsp;<span style="color:#475569">${cleanAxis(lv.axis)}</span></div>` +
+            `<div>l<sub>e</sub>/h = ${lv.le_h} · <b>${lv.slender ? 'SLENDER' : 'SHORT'}</b></div>` +
+            `<div style="margin-top:4px">Bars: <b>${lv.bars}</b></div>` +
+            `<div>Links: ${lv.links || '—'}</div>` +
+            `<div style="margin-top:4px">Utilisation: <b style="color:${c}">${lv.status === 'inadequate' ? 'INADEQUATE' : (u * 100).toFixed(0) + '%'}</b></div>`;
+    }
+
+    function build3DScene() {
+        if (!scene) return;
+
+        columnMeshes.forEach(m => scene.remove(m));
+        columnMeshes = [];
+        clearAnnotations();
+
+        const viz = window._colViz;
+        // Section is per-storey (st.b / st.h_dim); b0/h0 are the base lift, for camera framing.
+        const b0 = ((storeys[0] && storeys[0].b) || 300) / 1000;
+        const h0 = ((storeys[0] && storeys[0].h_dim) || 400) / 1000;
+
+        let currentY = 0;
+
+        storeys.forEach((st, i) => {
+            const lv = viz && viz.lifts[i];   // viz.lifts are index-aligned with storeys
+            const b_m = (st.b || 300) / 1000;
+            const h_m = (st.h_dim || 400) / 1000;
+
+            const geom = new THREE.BoxGeometry(b_m, st.h, h_m);
+            const fill = lv ? utilColor(lv.utilisation, lv.status) : COL_GREY;
+            const mat = new THREE.MeshStandardMaterial({ color: fill, roughness: 0.65, metalness: 0.05 });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.y = currentY + (st.h / 2);
+            mesh.userData = { id: st.id };
+
+            const selected = st.id === selectedStoreyId;
+            const edges = new THREE.EdgesGeometry(geom);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: selected ? 0x0ea5e9 : 0x1e293b }));
+            mesh.add(line);
+            if (selected) {
+                const halo = new THREE.Mesh(
+                    new THREE.BoxGeometry(b_m * 1.14, st.h * 1.015, h_m * 1.14),
+                    new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.12 }));
+                mesh.add(halo);
+            }
+
+            // faint tributary slab at the joint on TOP of this storey
+            const slabGeom = new THREE.BoxGeometry(Math.max(b_m * 4, 2), 0.06, Math.max(h_m * 4, 2));
+            const slab = new THREE.Mesh(slabGeom, new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.14 }));
+            slab.position.y = st.h / 2;
+            mesh.add(slab);
+
+            scene.add(mesh);
+            columnMeshes.push(mesh);
+
+            // lift name tag
+            const nameSprite = makeLabelSprite(st.name, 'rgba(30,41,59,0.82)');
+            nameSprite.position.set(b_m / 2 + 0.18, currentY + st.h / 2, h_m / 2 + 0.18);
+            scene.add(nameSprite); annObjects.push(nameSprite);
+
+            // beams framing in at the TOP joint (x -> world X, y -> world Z; side sets sign)
+            const beams = lv ? lv.beams : (st.beams || []);
+            const jointY = currentY + st.h;
+            beams.forEach(bm => {
+                const bw = (bm.b || 300) / 1000, bh = (bm.h || 600) / 1000;
+                const stub = Math.max(0.5, Math.min((bm.span || 3) * 0.5, 1.8));
+                const sign = (bm.side == -1 || bm.side === '-1') ? -1 : 1;
+                const beamMat = new THREE.MeshStandardMaterial({ color: 0xb98a54, roughness: 0.8 });
+                let g, mb;
+                if (bm.axis === 'x') {
+                    g = new THREE.BoxGeometry(stub, bh, bw);
+                    mb = new THREE.Mesh(g, beamMat);
+                    mb.position.set(sign * (b_m / 2 + stub / 2), jointY - bh / 2, 0);
+                } else {
+                    g = new THREE.BoxGeometry(bw, bh, stub);
+                    mb = new THREE.Mesh(g, beamMat);
+                    mb.position.set(0, jointY - bh / 2, sign * (h_m / 2 + stub / 2));
+                }
+                mb.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0x5b3d1d })));
+                scene.add(mb); annObjects.push(mb);
+            });
+
+            // force glyphs on the selected lift (needs analysis results)
+            if (selected && lv) {
+                const nLen = Math.min(1.0, 0.4 + Math.abs(lv.N) / 4000);
+                const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0),
+                    new THREE.Vector3(0, jointY + nLen + 0.06, 0), nLen, 0x0ea5e9, nLen * 0.25, nLen * 0.16);
+                scene.add(arrow); annObjects.push(arrow);
+                const nLbl = makeLabelSprite('N = ' + Math.round(lv.N) + ' kN', 'rgba(14,165,233,0.92)');
+                nLbl.position.set(0, jointY + nLen + 0.22, 0);
+                scene.add(nLbl); annObjects.push(nLbl);
+
+                const midY = currentY + st.h / 2;
+                const mkArc = (axis, mag, colr, tag, bg) => {
+                    if (Math.abs(mag) < 0.05) return;
+                    const a = makeMomentArc(axis, colr);
+                    a.position.set(0, midY, 0);
+                    scene.add(a); annObjects.push(a);
+                    const lbl = makeLabelSprite(tag + ' = ' + mag.toFixed(1) + ' kNm', bg);
+                    const off = 0.55;
+                    lbl.position.set(axis === 'x' ? 0 : off, midY + 0.5, axis === 'x' ? off : 0);
+                    scene.add(lbl); annObjects.push(lbl);
+                };
+                const mxGov = Math.abs(lv.Mx_top) >= Math.abs(lv.Mx_bot) ? lv.Mx_top : lv.Mx_bot;
+                const myGov = Math.abs(lv.My_top) >= Math.abs(lv.My_bot) ? lv.My_top : lv.My_bot;
+                mkArc('x', mxGov, 0xef4444, 'Mx', 'rgba(239,68,68,0.92)');
+                mkArc('y', myGov, 0x8b5cf6, 'My', 'rgba(139,92,246,0.92)');
+            }
+
+            currentY += st.h;
+        });
+
+        if (controls) controls.target.set(0, currentY / 2, 0);
+        if (!window._colCamPlaced) {
+            camera.position.set(b0 * 8 + 3.5, currentY * 0.6 + 1.6, h0 * 8 + 4.8);
+            window._colCamPlaced = true;
+        }
+        updateHud();
+    }
+
+    function update3DSelection() {
+        if (!threeInitialized) return;
+        build3DScene();   // rebuild so edges/halo/glyphs/HUD follow the selection
+    }
+    
+    function onMouseClick(event) {
+        const container = document.getElementById('column3DContainer');
+        const rect = container.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+        
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(columnMeshes);
+        
+        if (intersects.length > 0) {
+            let obj = intersects[0].object;
+            // Handle if the line or slab was clicked instead of the main mesh
+            if (obj.parent && obj.parent.userData && obj.parent.userData.id) obj = obj.parent;
+            if (obj.userData && obj.userData.id) {
+                selectedStoreyId = obj.userData.id;
+                update3DSelection();
+                renderStoreyTable();
+            }
+        }
+    }
+    
+    function onWindowResize() {
+        const container = document.getElementById('column3DContainer');
+        if (!container || !camera || !renderer) return;
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+    
+    function animate() {
+        requestAnimationFrame(animate);
+        if (controls) controls.update();
+        if (renderer && scene && camera) renderer.render(scene, camera);
+    }
+
+    document.getElementById('modeColumn').addEventListener('click', () => {
+        if (!threeInitialized) {
+            setTimeout(() => {
+                init3D();
+                renderStoreyTable();
+            }, 50);
+        } else {
+            // Need to resize in case the window changed while hidden
+            setTimeout(onWindowResize, 50);
+        }
+    });
+    
+    // Initial render for table (hidden state)
+    renderStoreyTable();
+
+    document.getElementById('runColumnDesign').addEventListener('click', async () => {
+        const colStatus = document.getElementById('colStatus');
+        colStatus.textContent = 'Designing bottom column...';
+        colStatus.classList.remove('error');
+        
+        if (storeys.length === 0) {
+             colStatus.textContent = 'No storeys defined.';
+             colStatus.classList.add('error');
+             return;
+        }
+        
+        // Use the first storey in the array as the "bottom-most"
+        const st = storeys[0];
+        
+        try {
+            const payload = {
+                b: st.b,
+                h: st.h_dim,
+                l0: st.h,
+                braced: document.getElementById('colBraced').value === 'braced',
+                cond_top: document.getElementById('colBaseFixity').value,
+                cond_bot: document.getElementById('colBaseFixity').value,
+                N: st.N,
+                Mx_top: st.mxTop,
+                Mx_bot: st.mxBot,
+                My_top: st.myTop,
+                My_bot: st.myBot,
+                fcu: document.getElementById('colFcu').value,
+                fy: document.getElementById('colFy').value,
+                cover: document.getElementById('colCover').value,
+                target_dia: document.getElementById('colTargetDia').value
+            };
+            const response = await fetch('/design_column', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                colStatus.textContent = data.error || 'Column design failed.';
+                colStatus.classList.add('error');
+                return;
+            }
+            
+            // Output to the main panel
+            document.getElementById('tabs').innerHTML = `
+                <a href="#" class="tab3D-link">3D Model</a>
+                <a href="#" class="active tabReport-link">Design Report</a>
+            `;
+            document.getElementById('output').innerHTML = data.html;
+            
+            document.getElementById('column3DWrapper').style.display = 'none';
+            document.getElementById('output').style.display = 'block';
+            
+            document.querySelector('.tab3D-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelector('.tab3D-link').classList.add('active');
+                document.querySelector('.tabReport-link').classList.remove('active');
+                document.getElementById('output').style.display = 'none';
+                document.getElementById('column3DWrapper').style.display = 'flex';
+                setTimeout(onWindowResize, 50);
+            });
+            
+            document.querySelector('.tabReport-link').addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelector('.tabReport-link').classList.add('active');
+                document.querySelector('.tab3D-link').classList.remove('active');
+                document.getElementById('column3DWrapper').style.display = 'none';
+                document.getElementById('output').style.display = 'block';
+            });
+            
+            if (window.MathJax) {
+                window.MathJax.typesetPromise([document.getElementById('output')]).catch((err) => console.log(err.message));
+            }
+            
+            colStatus.textContent = 'Design complete.';
+        } catch (error) {
+            colStatus.textContent = error.message;
+            colStatus.classList.add('error');
+        }
+    });
+
+    document.getElementById('analyzeColumn').addEventListener('click', async () => {
+        const colStatus = document.getElementById('colStatus');
+        colStatus.textContent = 'Analyzing frame and designing all lifts...';
+        colStatus.classList.remove('error');
+        if (storeys.length === 0) {
+            colStatus.textContent = 'No storeys defined.';
+            colStatus.classList.add('error');
+            return;
+        }
+        try {
+            const payload = {
+                global: {
+                    fcu: parseFloat(document.getElementById('colFcu').value),
+                    fy: parseFloat(document.getElementById('colFy').value),
+                    cover: parseFloat(document.getElementById('colCover').value),
+                    target_dia: parseFloat(document.getElementById('colTargetDia').value),
+                    braced: document.getElementById('colBraced').value === 'braced',
+                    base_fixity: parseInt(document.getElementById('colBaseFixity').value),
+                    halve_beam_stiffness: document.getElementById('colHalveStiffness').checked
+                },
+                storeys: storeys.map(st => ({
+                    name: st.name, height: st.h, b: st.b, h: st.h_dim,
+                    area_load: st.area_load, line_load: st.line_load,
+                    beams: (st.beams || []).map(b => ({
+                        axis: b.axis, side: b.side, span: b.span, b: b.b, h: b.h,
+                        wall: b.wall, w: b.w
+                    }))
+                }))
+            };
+            const response = await fetch('/analyze_column', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                colStatus.textContent = data.error || 'Frame analysis failed.';
+                colStatus.classList.add('error');
+                return;
+            }
+
+            const designHtml = data.designs.map(d =>
+                `<h3 style="margin:18px 0 6px; color:var(--accent);">Lift: ${d.name}</h3>${d.html}`).join('');
+
+            document.getElementById('tabs').innerHTML = `
+                <a href="#" class="tab3D-link">3D Model</a>
+                <a href="#" class="active tabMoment-link">Moment Analysis</a>
+                <a href="#" class="tabReport-link">Design Report</a>`;
+
+            const output = document.getElementById('output');
+            output.innerHTML = data.moment_html;
+            window._colMomentHtml = data.moment_html;
+            window._colDesignHtml = designHtml;
+            window._colViz = data.viz;
+            window._colCamPlaced = false;   // reframe once for the freshly-analysed model
+            if (threeInitialized) build3DScene();
+
+            document.getElementById('column3DWrapper').style.display = 'none';
+            output.style.display = 'block';
+
+            const setActive = (cls) => {
+                ['.tab3D-link','.tabMoment-link','.tabReport-link'].forEach(s => {
+                    const el = document.querySelector(s); if (el) el.classList.remove('active'); });
+                const a = document.querySelector(cls); if (a) a.classList.add('active');
+            };
+            document.querySelector('.tab3D-link').addEventListener('click', (e) => {
+                e.preventDefault(); setActive('.tab3D-link');
+                output.style.display = 'none';
+                document.getElementById('column3DWrapper').style.display = 'flex';
+                if (!threeInitialized) { init3D(); } else { build3DScene(); }
+                setTimeout(onWindowResize, 50);
+            });
+            document.querySelector('.tabMoment-link').addEventListener('click', (e) => {
+                e.preventDefault(); setActive('.tabMoment-link');
+                document.getElementById('column3DWrapper').style.display = 'none';
+                output.style.display = 'block';
+                output.innerHTML = window._colMomentHtml;
+                if (window.MathJax) window.MathJax.typesetPromise([output]).catch(()=>{});
+            });
+            document.querySelector('.tabReport-link').addEventListener('click', (e) => {
+                e.preventDefault(); setActive('.tabReport-link');
+                document.getElementById('column3DWrapper').style.display = 'none';
+                output.style.display = 'block';
+                output.innerHTML = window._colDesignHtml;
+                if (window.MathJax) window.MathJax.typesetPromise([output]).catch(()=>{});
+            });
+
+            if (window.MathJax) {
+                window.MathJax.typesetPromise([output]).catch((err) => console.log(err.message));
+            }
+            colStatus.textContent = 'Frame analyzed — ' + data.designs.length + ' lift(s) designed.';
+        } catch (error) {
+            colStatus.textContent = error.message;
+            colStatus.classList.add('error');
+        }
+    });
     
     document.getElementById('clear').addEventListener('click', () => {
       currentResults = null;
@@ -2066,6 +2847,33 @@
     rebuildSpans();
     renderTabs();
     renderActiveTable();
+    // RESIZER LOGIC
+    const resizer = document.getElementById('resizer');
+    const mainContainer = document.getElementById('main-container');
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        let newWidth = e.clientX - 14; 
+        if (newWidth < 300) newWidth = 300; 
+        if (newWidth > window.innerWidth - 300) newWidth = window.innerWidth - 300; 
+        mainContainer.style.setProperty('--sidebar-width', `${newWidth}px`);
+        if (typeof onWindowResize === 'function') onWindowResize();
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'auto';
+        }
+    });
   </script>
 </body>
 </html>

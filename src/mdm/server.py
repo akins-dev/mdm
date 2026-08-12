@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple
 from .models.beam import Span, fmt, support_names
 from .analyzers import ContinuousAnalyzer
 from .design.design import design_section
+from .design.column import design_column_section, analyze_and_design_column
 
 
 def get_html_template() -> str:
@@ -172,6 +173,44 @@ class MomentDistributionHandler(BaseHTTPRequestHandler):
                 result = calculate_from_payload(payload)
                 self.send_json(200, result)
             except (json.JSONDecodeError, ValueError) as error:
+                self.send_json(400, {"error": str(error)})
+            return
+            
+        if self.path == "/analyze_column":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                result = analyze_and_design_column(payload)
+                self.send_json(200, result)
+            except Exception as error:
+                self.send_json(400, {"error": str(error)})
+            return
+
+        if self.path == "/design_column":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                
+                html_report = design_column_section(
+                    b=float(payload.get("b", 300)),
+                    h=float(payload.get("h", 400)),
+                    l0=float(payload.get("l0", 3.0)),
+                    is_braced=bool(payload.get("braced", True)),
+                    cond_top=int(payload.get("cond_top", 1)),
+                    cond_bot=int(payload.get("cond_bot", 1)),
+                    N=float(payload.get("N", 1000)),
+                    Mx_top=float(payload.get("Mx_top", 50)),
+                    Mx_bot=float(payload.get("Mx_bot", -25)),
+                    My_top=float(payload.get("My_top", 20)),
+                    My_bot=float(payload.get("My_bot", -10)),
+                    fcu=float(payload.get("fcu", 30)),
+                    fy=float(payload.get("fy", 460)),
+                    cover=float(payload.get("cover", 35)),
+                    target_dia=float(payload.get("target_dia", 20))
+                )
+                
+                self.send_json(200, {"html": html_report})
+            except Exception as error:
                 self.send_json(400, {"error": str(error)})
             return
             
